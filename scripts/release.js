@@ -4,7 +4,8 @@
 //   release/v<version>/Nothing-X-Mac-<version>-universal.zip   zipped .app
 //   release/v<version>/SHA256SUMS.txt                          checksums
 //
-// Run through `npm run release`, which builds the universal app first.
+// Run through `npm run release`, which builds the universal app first
+// (npm run dist).
 
 const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -16,7 +17,9 @@ const { version } = require('../package.json');
 const APP_NAME = 'Nothing X Mac';
 const BASE = `Nothing-X-Mac-${version}-universal`;
 
-const appPath = path.join(ROOT, 'dist', `${APP_NAME}-darwin-universal`, `${APP_NAME}.app`);
+const appPath = path.join(
+  ROOT, 'src-tauri', 'target', 'universal-apple-darwin', 'release', 'bundle', 'macos', `${APP_NAME}.app`,
+);
 const outDir = path.join(ROOT, 'release', `v${version}`);
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' });
@@ -31,13 +34,16 @@ function main() {
   // Both architectures must be present in the app and the Bluetooth helper.
   for (const binary of [
     path.join(appPath, 'Contents', 'MacOS', APP_NAME),
-    path.join(appPath, 'Contents', 'Resources', 'nx-bridge'),
+    path.join(appPath, 'Contents', 'MacOS', 'nx-bridge'),
   ]) {
     const archs = execFileSync('lipo', ['-archs', binary]).toString().trim();
     if (!archs.includes('arm64') || !archs.includes('x86_64')) {
       throw new Error(`${path.basename(binary)} is not universal (${archs})`);
     }
   }
+
+  // The signature must be intact after bundling.
+  run('codesign', ['--verify', '--deep', '--strict', appPath]);
 
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });

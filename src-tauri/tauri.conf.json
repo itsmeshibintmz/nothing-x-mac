@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nothing X Mac",
+  "mainBinaryName": "Nothing X Mac",
+  "version": "../package.json",
+  "identifier": "com.nothingxmac.app",
+  "build": {
+    "frontendDist": "../web",
+    "additionalWatchFolders": ["../web"],
+    "beforeDevCommand": { "script": "npm run build:bridge", "wait": true },
+    "beforeBuildCommand": "npm run build:bridge -- universal"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "popover",
+        "url": "index.html",
+        "title": "Nothing X Mac",
+        "width": 300,
+        "height": 360,
+        "visible": false,
+        "focus": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "acceptFirstMouse": true,
+        "backgroundThrottling": "disabled",
+        "windowEffects": {
+          "effects": ["menu"],
+          "state": "active",
+          "radius": 12
+        }
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
+    "category": "Utility",
+    "copyright": "Made by Yash Raut · yashraut.me",
+    "externalBin": ["../build/nx-bridge"],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-"
+    }
+  }
+}
