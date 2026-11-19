@@ -7,7 +7,7 @@
   "build": {
     "frontendDist": "../web",
     "additionalWatchFolders": ["../web"],
-    "beforeDevCommand": "npm run build:bridge",
+    "beforeDevCommand": { "script": "npm run build:bridge", "wait": true },
     "beforeBuildCommand": "npm run build:bridge -- universal"
   },
   "app": {
