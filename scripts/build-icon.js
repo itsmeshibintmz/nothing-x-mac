@@ -1,5 +1,11 @@
-// Builds packaging/icon.icns, the app icon, from src/assets/logo.svg:
-// the white logo on a dark macOS-style rounded square with a soft shadow.
+// Builds the icons in src-tauri/icons from web/assets/logo.svg:
+//
+//   icon.icns       app icon: the white logo on a dark macOS-style rounded
+//                   square with a soft shadow
+//   icon.png        128 px copy of the app icon (Tauri's default window icon)
+//   icon-1024.png   1024 px copy (README)
+//   tray.png        menu bar icon: the bare logo as a template image, which
+//                   macOS tints for light and dark menu bars
 //
 //   npm run build:icon
 //
@@ -11,10 +17,15 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { loadLogo, rasterizeLogo } = require('../src/logo-raster');
+const { loadLogo, rasterizeLogo } = require('./lib/logo-raster');
 
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'packaging', 'icon.icns');
+const ICONS = path.join(ROOT, 'src-tauri', 'icons');
+const OUT = path.join(ICONS, 'icon.icns');
+
+// Menu bar icon. The tray always shows its image 18 pt tall, so the 14 pt logo
+// is centred on an 18 pt canvas; drawn at 2x for Retina menu bars.
+const TRAY = { canvasPt: 18, logoPt: 14, scale: 2 };
 
 // Layout on the 1024 px macOS icon grid.
 const GRID = 1024;
@@ -85,6 +96,22 @@ function renderIcon(size, logo) {
   return rgba;
 }
 
+// Black logo with its coverage as alpha, centred vertically on the canvas.
+function renderTray(logo) {
+  const height = TRAY.canvasPt * TRAY.scale;
+  const logoH = TRAY.logoPt * TRAY.scale;
+  const width = Math.ceil(logoH * logo.aspect);
+  const top = Math.round((height - logoH) / 2);
+  const coverage = rasterizeLogo(logo, width, logoH);
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < logoH; y++) {
+    for (let x = 0; x < width; x++) {
+      rgba[((y + top) * width + x) * 4 + 3] = Math.round(Math.min(coverage[y * width + x], 1) * 255);
+    }
+  }
+  return { rgba, width, height };
+}
+
 // ---- minimal PNG encoder (RGBA, 8-bit) ---------------------------------------
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
@@ -136,7 +163,7 @@ const ICONSET = [
 
 function main() {
   const logo = loadLogo();
-  if (!logo) throw new Error('src/assets/logo.svg has no path');
+  if (!logo) throw new Error('web/assets/logo.svg has no path');
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nxm-icon-'));
   const iconset = path.join(dir, 'icon.iconset');
@@ -149,9 +176,14 @@ function main() {
 
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   execFileSync('iconutil', ['-c', 'icns', iconset, '-o', OUT], { stdio: 'inherit' });
-  fs.writeFileSync(path.join(path.dirname(OUT), 'icon-1024.png'), rendered.get(1024));
+  fs.writeFileSync(path.join(ICONS, 'icon-1024.png'), rendered.get(1024));
+  fs.writeFileSync(path.join(ICONS, 'icon.png'), rendered.get(128));
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log(`Built ${path.relative(ROOT, OUT)} (+ icon-1024.png preview)`);
+
+  const tray = renderTray(logo);
+  fs.writeFileSync(path.join(ICONS, 'tray.png'), encodePng(tray.rgba, tray.width, tray.height));
+
+  console.log(`Built ${path.relative(ROOT, ICONS)}: icon.icns, icon.png, icon-1024.png, tray.png`);
 }
 
 main();

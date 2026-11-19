@@ -2,26 +2,23 @@
   "name": "nothing-x-mac",
   "productName": "Nothing X Mac",
   "version": "0.1.0",
+  "private": true,
   "description": "Control Nothing and CMF earbuds from the Mac menu bar",
   "author": {
     "name": "Yash Raut",
     "url": "https://yashraut.me"
   },
   "homepage": "https://github.com/yashraut362/nothing-x-mac",
-  "main": "src/main.js",
-  "scripts": {
-    "build:native": "mkdir -p build && swiftc -O -framework IOBluetooth -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker native/Info.plist native/NXBridge.swift -o build/nx-bridge",
-    "prestart": "npm run build:native",
-    "start": "electron .",
-    "dist": "npm run build:native && node scripts/package.js",
-    "install-app": "npm run dist && ditto \"dist/Nothing X Mac-darwin-arm64/Nothing X Mac.app\" \"/Applications/Nothing X Mac.app\" && echo \"Installed to /Applications/Nothing X Mac.app\"",
-    "build:icon": "node scripts/build-icon.js",
-    "build:native:universal": "mkdir -p build && swiftc -O -target arm64-apple-macos13 -framework IOBluetooth -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker native/Info.plist native/NXBridge.swift -o build/nx-bridge-arm64 && swiftc -O -target x86_64-apple-macos13 -framework IOBluetooth -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker native/Info.plist native/NXBridge.swift -o build/nx-bridge-x86_64 && lipo -create build/nx-bridge-arm64 build/nx-bridge-x86_64 -output build/nx-bridge && rm build/nx-bridge-arm64 build/nx-bridge-x86_64",
-    "release": "npm run build:native:universal && node scripts/package.js --universal && node scripts/release.js"
-  },
   "license": "MIT",
+  "scripts": {
+    "build:bridge": "scripts/build-bridge.sh",
+    "build:icon": "node scripts/build-icon.js",
+    "start": "tauri dev --no-dev-server",
+    "dist": "tauri build --target universal-apple-darwin",
+    "install-app": "npm run dist && ditto \"src-tauri/target/universal-apple-darwin/release/bundle/macos/Nothing X Mac.app\" \"/Applications/Nothing X Mac.app\" && echo \"Installed to /Applications/Nothing X Mac.app\"",
+    "release": "npm run dist && node scripts/release.js"
+  },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
-    "electron": "^45.3.2"
+    "@tauri-apps/cli": "^2"
   }
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packaging/icon-1024.png" width="128" height="128" alt="Nothing X Mac icon">
+  <img src="src-tauri/icons/icon-1024.png" width="128" height="128" alt="Nothing X Mac icon">
 </p>
 
 <h1 align="center">Nothing X Mac</h1>
@@ -96,14 +96,17 @@ phone: the earbuds only let one app control them at a time.
 
 ## Development
 
+The app is built with [Tauri](https://tauri.app): the UI and the earbud logic
+run in the system web view, inside a small Rust shell. You need
+[Rust](https://rustup.rs), Node.js and Xcode's command line tools.
+
 ```bash
 npm install
 npm start
 ```
 
-`npm start` also builds the Swift Bluetooth helper (`native/NXBridge.swift`),
-which needs Xcode's command line tools. macOS asks for Bluetooth permission on
-first run.
+`npm start` also builds the Swift Bluetooth helper (`native/mac/NXBridge.swift`).
+macOS asks for Bluetooth permission on first run.
 
 Log every message to and from the earbuds:
 
@@ -114,10 +117,10 @@ NXM_DEBUG=1 npm start
 ### Build and release
 
 ```bash
-npm run dist          # app for this Mac's chip -> dist/
+npm run dist          # universal app (Apple Silicon + Intel) -> src-tauri/target/
 npm run install-app   # build and copy to /Applications
-npm run release       # universal app -> release/v<version>/ DMG, zip, checksums
-npm run build:icon    # regenerate packaging/icon.icns from src/assets/logo.svg
+npm run release       # build, then DMG, zip and checksums -> release/v<version>/
+npm run build:icon    # regenerate the app and menu bar icons from web/assets/logo.svg
 ```
 
 Builds are ad-hoc signed, not notarized.
@@ -125,18 +128,22 @@ Builds are ad-hoc signed, not notarized.
 ### Layout
 
 ```
-native/NXBridge.swift     Bluetooth helper: finds the buds, relays raw bytes over stdio
-src/main.js               Menu bar icon, panel window, IPC
-src/device/               Earbud protocol and state
-  bridge.js               Runs the helper
-  protocol.js             Packet framing and CRC
-  commands.js             Command ids and payload codecs
-  models.js               Per-model capabilities (+ eq-presets.js, gesture-profiles.js)
-  nothing-device.js       Device state; delegates to the feature modules below
-  confirmed-setting.js    Waits for the buds to confirm a change
-  equalizer.js  quick-settings.js  dual-connection.js  gestures.js
-src/popover/              Panel UI (one file per control / page)
-scripts/                  Packaging, app icon and release builds
+web/                      Everything that runs in the web view (shared by all platforms)
+  index.html, styles.css  Panel markup and styles
+  ui/                     Panel UI (one file per control / page)
+  core/                   Earbud protocol and state
+    protocol.js           Packet framing and CRC
+    commands.js           Command ids and payload codecs
+    models.js             Per-model capabilities (+ eq-presets.js, gesture-profiles.js)
+    nothing-device.js     Device state; delegates to the feature modules below
+    confirmed-setting.js  Waits for the buds to confirm a change
+    equalizer.js  quick-settings.js  dual-connection.js  gestures.js
+  platform/               Glue between the page and the app shell
+src-tauri/                App shell (Rust): tray icon, panel window, native menus
+  src/bridge.rs           Runs the Bluetooth helper and relays its bytes
+  src/platform/           Per-OS code: system symbols, accent colour, Open at Login
+native/mac/NXBridge.swift Bluetooth helper: finds the buds, relays raw bytes over stdio
+scripts/                  Helper, icon and release builds
 ```
 
 ## About the author
