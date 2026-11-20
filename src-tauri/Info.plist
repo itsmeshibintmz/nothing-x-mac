@@ -9,6 +9,8 @@
   <!-- Menu bar only: no Dock icon or app menu. -->
   <key>LSUIElement</key>
   <true/>
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <!-- Shown in the Bluetooth permission prompt (the bundled nx-bridge helper talks to the earbuds). -->
   <key>NSBluetoothAlwaysUsageDescription</key>
   <string>Nothing X Mac connects to your earbuds to show battery and control their settings.</string>

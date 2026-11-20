@@ -105,8 +105,9 @@ npm install
 npm start
 ```
 
-`npm start` also builds the Swift Bluetooth helper (`native/mac/NXBridge.swift`).
-macOS asks for Bluetooth permission on first run.
+Development requires Rust and Xcode. `npm start` also builds the Swift Bluetooth
+helper (`native/mac/NXBridge.swift`). macOS asks for Bluetooth permission on
+first run.
 
 Log every message to and from the earbuds:
 
@@ -120,9 +121,12 @@ NXM_DEBUG=1 npm start
 npm run dist          # universal app (Apple Silicon + Intel) -> src-tauri/target/
 npm run install-app   # build and copy to /Applications
 npm run release       # build, then DMG, zip and checksums -> release/v<version>/
-npm run build:icon    # regenerate the app and menu bar icons from web/assets/logo.svg
+npm run build:icon    # regenerate the app and menu bar icons
 ```
 
+The layered app icon supports macOS's default, dark, clear and tinted styles;
+an ICNS fallback supports older macOS releases. Building icons requires Xcode's
+asset catalog compiler (`actool`).
 Builds are ad-hoc signed, not notarized.
 
 ### Layout

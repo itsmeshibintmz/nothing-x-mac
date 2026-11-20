@@ -76,14 +76,14 @@ hr {
   background: var(--accent);
   color: #fff;
 }
-/* App logo, drawn in the badge's text colour via a mask (assets/logo.svg). */
+/* App logo, drawn in the badge's text colour. */
 .device-badge .logo {
   display: block;
   width: 16px;
   height: 14px;
   background-color: currentColor;
-  -webkit-mask: url("assets/logo.svg") center / contain no-repeat;
-  mask: url("assets/logo.svg") center / contain no-repeat;
+  -webkit-mask: url("assets/earbud-x.png") center / contain no-repeat;
+  mask: url("assets/earbud-x.png") center / contain no-repeat;
 }
 .header-text { flex: 1; min-width: 0; }
 .header-actions {
