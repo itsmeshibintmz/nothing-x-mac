@@ -1,5 +1,6 @@
-// The popover: a borderless, translucent window that drops down from the tray
-// icon and hides when it loses focus.
+// The popover: a borderless window anchored to the tray icon that hides when
+// it loses focus. It drops down from the macOS menu bar and opens upward from
+// the Windows taskbar.
 
 use std::{
     sync::{
@@ -19,21 +20,41 @@ use crate::{platform, tray};
 
 pub const LABEL: &str = "popover";
 const WIDTH: f64 = 300.0;
+/// Height before the page reports its real one (matches the window config).
+const INITIAL_HEIGHT: f64 = 360.0;
 const MIN_HEIGHT: f64 = 100.0;
 const MAX_HEIGHT: f64 = 800.0;
-/// Gap between the menu bar and the popover, and to the screen edges (points).
+/// Gap between the tray icon's bar and the popover, and to the screen edges (points).
 const TRAY_GAP: f64 = 4.0;
 const SCREEN_MARGIN: f64 = 8.0;
 /// A click on the tray icon blurs (and hides) the popover first; a click this
 /// soon after hiding is that same click and must not reopen it.
 const REOPEN_GUARD: Duration = Duration::from_millis(300);
 
-#[derive(Default)]
 pub struct PopoverState {
     last_hidden: Mutex<Option<Instant>>,
     /// True while a native pop-up menu from the panel is open: it takes focus,
     /// but shouldn't close the panel.
     pub popup_menu_open: AtomicBool,
+    /// Current window height in points.
+    height: Mutex<f64>,
+    /// The tray icon's rectangle the popover was last placed against.
+    anchor: Mutex<Option<Rect>>,
+    /// True when the popover sits above the icon (a taskbar at the bottom).
+    /// Its bottom edge must then stay put when the height changes.
+    opens_upward: AtomicBool,
+}
+
+impl Default for PopoverState {
+    fn default() -> Self {
+        Self {
+            last_hidden: Mutex::new(None),
+            popup_menu_open: AtomicBool::new(false),
+            height: Mutex::new(INITIAL_HEIGHT),
+            anchor: Mutex::new(None),
+            opens_upward: AtomicBool::new(false),
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -45,7 +66,7 @@ fn popover_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(LABEL)
 }
 
-/// Shows the popover under the tray icon. `anchor` is the icon's rectangle;
+/// Shows the popover next to the tray icon. `anchor` is the icon's rectangle;
 /// when missing it is looked up.
 pub fn show(app: &AppHandle, anchor: Option<Rect>) {
     let Some(window) = popover_window(app) else { return };
@@ -85,13 +106,27 @@ pub fn toggle(app: &AppHandle, anchor: Rect) {
     }
 }
 
-pub fn set_height(window: &WebviewWindow, height: f64) {
+pub fn set_height(app: &AppHandle, window: &WebviewWindow, height: f64) {
     let height = height.clamp(MIN_HEIGHT, MAX_HEIGHT).ceil();
+    let state = app.state::<PopoverState>();
+    *state.height.lock().unwrap() = height;
     let _ = window.set_size(LogicalSize::new(WIDTH, height));
+
+    // Growing downward would push an upward-opening popover into the taskbar.
+    if state.opens_upward.load(Ordering::SeqCst) {
+        let anchor = *state.anchor.lock().unwrap();
+        if let Some(anchor) = anchor {
+            position(app, window, &anchor);
+        }
+    }
 }
 
-/// Centres the popover under the tray icon, kept inside the icon's screen.
+/// Centres the popover on the tray icon, kept inside the icon's screen: below
+/// an icon in the top half of the screen, above one in the bottom half.
 fn position(app: &AppHandle, window: &WebviewWindow, anchor: &Rect) {
+    let state = app.state::<PopoverState>();
+    *state.anchor.lock().unwrap() = Some(*anchor);
+
     let origin: PhysicalPosition<f64> = anchor.position.to_physical(1.0);
     let monitor = app
         .monitor_from_point(origin.x, origin.y)
@@ -112,7 +147,19 @@ fn position(app: &AppHandle, window: &WebviewWindow, anchor: &Rect) {
             - SCREEN_MARGIN * scale;
         x = x.clamp(left, right.max(left));
     }
-    let y = icon_pos.y + icon_size.height + TRAY_GAP * scale;
+    let icon_centre_y = icon_pos.y + icon_size.height / 2.0;
+    let screen_centre_y = monitor.as_ref().map_or(f64::MAX, |m| {
+        f64::from(m.position().y) + f64::from(m.size().height) / 2.0
+    });
+    let opens_upward = icon_centre_y > screen_centre_y;
+    state.opens_upward.store(opens_upward, Ordering::SeqCst);
+
+    let y = if opens_upward {
+        let height = *state.height.lock().unwrap() * scale;
+        icon_pos.y - height - TRAY_GAP * scale
+    } else {
+        icon_pos.y + icon_size.height + TRAY_GAP * scale
+    };
 
     let _ = window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }

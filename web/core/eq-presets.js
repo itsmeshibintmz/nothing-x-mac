@@ -24,6 +24,7 @@ const dirac = (id) => ({ id, key: 'dirac', label: 'Dirac Opteo' });
 // style: which command family; customId: preset id that turns on custom EQ (null = none)
 const EQ_PROFILES = {
   nothing: { style: 'eq', presets: NOTHING, customId: 5 },
+  headphonePro: { style: 'eq', presets: [...NOTHING, { id: 7, key: 'detail', label: 'More Detail' }], customId: 5 },
   nothingNoCustom: { style: 'eq', presets: NOTHING, customId: null },
   cmf: { style: 'listening', presets: [dirac(0), ...CMF], customId: 6 },
   cmfNoDirac: { style: 'listening', presets: CMF, customId: 6 },

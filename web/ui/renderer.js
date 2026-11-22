@@ -28,19 +28,21 @@ function applySymbols(symbols) {
 
 function renderHeader(state) {
   $('#panel').classList.toggle('disconnected', !state.connected);
-  $('#device-name').textContent = state.connected ? state.name : 'No Earbuds';
+  $('#device-name').textContent = state.connected ? state.name : 'No device';
   $('#device-status').textContent = state.connected ? 'Connected' : 'Not connected';
 }
 
-function renderBattery(battery) {
-  for (const part of ['left', 'right', 'case']) {
+function renderBattery(battery, caps) {
+  const single = Boolean(battery.stereo) || (caps.ring === 'headphone' && !battery.left && !battery.right && !battery.case);
+  for (const part of ['stereo', 'left', 'right', 'case']) {
     const el = $(`.bud[data-part="${part}"]`);
     const info = battery[part];
     // No case data (e.g. case closed or out of range): drop the column so the
     // buds sit centred. Missing buds stay visible but dimmed.
-    if (part === 'case') el.hidden = !info;
+    el.hidden = part === 'stereo' ? !single : single || (part === 'case' && !info);
     el.classList.toggle('unavailable', !info);
     el.classList.toggle('charging', Boolean(info?.charging));
+    el.querySelector('.pct').setAttribute('aria-label', info ? `${info.level}%${info.charging ? ', charging' : ''}` : 'Unavailable');
     el.classList.toggle('low', Boolean(info && !info.charging && info.level <= LOW_BATTERY));
     el.querySelector('.pct').textContent = info ? `${info.level}%` : '—';
     el.querySelector('.fill').style.width = info ? `${info.level}%` : '0';
@@ -59,7 +61,12 @@ function renderCapabilities(capabilities) {
 
 function render(state) {
   renderHeader(state);
-  renderBattery(state.battery);
+  renderBattery(state.battery, state.capabilities);
+  const locked = state.capabilities.pro && state.flatEq !== false;
+  $('.option[data-mode="transparency"]').disabled = Boolean(locked);
+  const flatStatus = $('#flat-eq-status');
+  flatStatus.hidden = !locked;
+  flatStatus.textContent = state.flatEq ? 'Flat EQ is on. Use the left earcup switch to restore Transparency, EQ and Spatial Audio.' : 'Reading the Flat EQ switch…';
   renderCapabilities(state.capabilities);
   switchLock.sync(state.noisePending);
   renderNoiseMode(state.noiseMode);
@@ -72,9 +79,27 @@ function render(state) {
   equalizer.render(state);
 }
 
-async function main() {
-  const { accent, symbols, device, platform } = await nx.init();
+// Per-platform touches the stylesheet can't do on its own. The Windows look
+// (styles.windows.css) keys off data-platform.
+// The app's own version, next to the firmware version in Quick Settings.
+function renderAppVersion(appVersion) {
+  $('#qs-app-version').textContent = `App version ${appVersion}`;
+  $('#qs-check-updates').addEventListener('click', () => nx.openReleases());
+}
+
+function applyPlatform(platform, appName) {
   document.documentElement.dataset.platform = platform;
+  document.title = appName;
+  for (const attr of ['title', 'aria-label']) $('#quit').setAttribute(attr, `Quit ${appName}`);
+
+  // Windows flyouts keep their buttons in a bar along the bottom.
+  if (platform === 'windows') $('#view-main footer').append($('.header-actions'));
+}
+
+async function main() {
+  const { accent, symbols, device, platform, appName, appVersion } = await nx.init();
+  applyPlatform(platform, appName);
+  renderAppVersion(appVersion);
   document.documentElement.style.setProperty('--accent', accent);
   nx.onAccent((c) => document.documentElement.style.setProperty('--accent', c));
   applySymbols(symbols);
@@ -102,7 +127,7 @@ async function main() {
     const btn = e.target.closest('.option');
     if (!btn || switchLock.locked || btn.getAttribute('aria-checked') === 'true') return;
     switchLock.lock(); // no more changes until the buds confirm this one
-    renderNoiseMode(btn.dataset.mode); // optimistic; device state confirms
+    renderNoiseMode(btn.dataset.mode);
     nx.setNoiseMode(btn.dataset.mode);
   });
 

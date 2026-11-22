@@ -15,10 +15,16 @@ mod popover;
 mod popup_menu;
 mod tray;
 
-use tauri::{Manager, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent};
 
-pub const APP_NAME: &str = "Nothing X Mac";
 pub const AUTHOR_URL: &str = "https://yashraut.me";
+/// Where "Check for updates" goes: the newest release, with its downloads.
+pub const RELEASES_URL: &str = "https://github.com/yashraut362/nothing-x-mac/releases/latest";
+
+/// The product name for this platform (from the Tauri config).
+pub fn app_name(app: &AppHandle) -> String {
+    app.package_info().name.clone()
+}
 
 fn main() {
     #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
@@ -30,6 +36,7 @@ fn main() {
             commands::set_height,
             commands::set_tooltip,
             commands::open_author,
+            commands::open_releases,
             commands::quit,
             commands::bridge_connection,
             commands::bridge_write,

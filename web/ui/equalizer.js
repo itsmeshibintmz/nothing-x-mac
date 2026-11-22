@@ -30,6 +30,9 @@ window.createEqualizer = function createEqualizer({ api, views, symbols }) {
   const sliders = Object.fromEntries(BANDS.map((b) => [b, custom.querySelector(`input[data-band="${b}"]`)]));
   const values = Object.fromEntries(BANDS.map((b) => [b, custom.querySelector(`[data-value-for="${b}"]`)]));
 
+  const advanced = $('advanced-eq');
+  advanced.addEventListener('change', () => api.setAdvancedEq(advanced.checked));
+
   let state = null;
   let builtKey = '';
 
@@ -114,22 +117,28 @@ window.createEqualizer = function createEqualizer({ api, views, symbols }) {
   function render(next) {
     state = next;
     const eqCaps = next.capabilities.eq;
-    button.disabled = !next.connected || eqCaps.presets.length === 0;
-    if (!next.connected) {
+    const flatLocked = next.capabilities.pro && next.flatEq !== false;
+    button.disabled = !next.connected || eqCaps.presets.length === 0 || flatLocked;
+    if (!next.connected || flatLocked) {
       if (views.isOpen('view-eq')) views.back();
       return;
     }
 
+    $('advanced-eq-row').hidden = !next.capabilities.pro;
+    advanced.checked = next.eq.advanced === true;
+    advanced.disabled = next.eq.advanced === null || next.eq.advancedPending || next.eq.pending;
+    const proLocked = next.capabilities.pro && (next.eq.advanced !== false || next.eq.advancedPending);
     buildTiles(eqCaps.presets);
     for (const tile of tiles.children) {
-      const selected = Number(tile.dataset.id) === next.eq.preset;
+      const selected = !proLocked && Number(tile.dataset.id) === next.eq.preset;
+      tile.disabled = Boolean(proLocked || next.eq.pending);
       tile.classList.toggle('on', selected);
       tile.setAttribute('aria-checked', String(selected));
       tile.querySelector('.qs-icon').classList.toggle('pending', selected && next.eq.pending);
     }
     tiles.classList.toggle('busy', next.eq.pending);
 
-    const showCustom = eqCaps.customId !== null && next.eq.preset === eqCaps.customId;
+    const showCustom = !proLocked && eqCaps.customId !== null && next.eq.preset === eqCaps.customId;
     custom.hidden = !showCustom;
     if (showCustom) paintCustom(next.eq.custom ?? { bass: 0, mid: 0, treble: 0 });
   }

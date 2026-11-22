@@ -9,7 +9,7 @@
 import { Emitter } from './emitter.js';
 import { encodeFrame, FrameParser } from './protocol.js';
 import {
-  Command, Response, decodeBattery, decodeNoiseMode, encodeNoiseMode, decodeBass, encodeBass,
+  Command, Response, decodeBattery, decodeNoiseMode, decodeProNoiseMode, encodeNoiseMode, decodeBass, encodeBass,
 } from './commands.js';
 import { capabilitiesForName, bassLevels } from './models.js';
 import { ConfirmedSetting } from './confirmed-setting.js';
@@ -25,6 +25,7 @@ function emptyState() {
   return {
     connected: false,
     name: null,
+    flatEq: null,
     battery: { left: null, right: null, case: null, stereo: null },
     noiseMode: null, // 'anc' | 'transparency' | 'off'
     ancStrength: null, // 'low' | 'mid' | 'high' | 'adaptive' (while noiseMode is 'anc')
@@ -51,6 +52,7 @@ class NothingDevice extends Emitter {
     this.parser = new FrameParser();
     this.state = emptyState();
     this.operationId = 0;
+    this.readTimers = new Set();
     this.batteryTimer = null;
     // Strength to use when noise cancellation is turned back on.
     this.lastAncStrength = 'high';
@@ -99,7 +101,7 @@ class NothingDevice extends Emitter {
   }
 
   stop() {
-    this.#clearTimers();
+    this.#onDisconnected();
     this.bridge.stop();
   }
 
@@ -112,6 +114,7 @@ class NothingDevice extends Emitter {
 
   setNoiseMode(mode) {
     if (!this.state.connected || this.noise.pending || mode === this.state.noiseMode) return;
+    if (this.state.capabilities.pro && mode === 'transparency' && this.state.flatEq !== false) return;
     const strength = mode === 'anc' ? this.#usableStrength(this.lastAncStrength) : null;
     this.#applyNoise(mode, strength);
   }
@@ -143,15 +146,33 @@ class NothingDevice extends Emitter {
     this.#send(Command.GET_BATTERY);
   }
 
+  refreshPanel() {
+    this.refreshBattery();
+    if (this.state.capabilities.pro) {
+      this.#send(Command.GET_FLAT_EQ);
+      this.#send(Command.GET_ADVANCED_EQ);
+      this.#send(Command.GET_NOISE_MODE);
+    }
+  }
+
   // ---- equalizer (see equalizer.js) ----------------------------------------
 
   setEqPreset(id) {
-    if (this.state.connected) this.equalizer.setPreset(id);
+    if (this.#canSetSimpleEq()) this.equalizer.setPreset(id);
   }
 
   // bands: any of { bass, mid, treble } in dB
   setCustomEq(bands) {
-    if (this.state.connected) this.equalizer.setCustom(bands);
+    if (this.#canSetSimpleEq()) this.equalizer.setCustom(bands);
+  }
+
+  #canSetSimpleEq() {
+    const { connected, capabilities, flatEq, eq } = this.state;
+    return connected && (!capabilities.pro || (flatEq === false && eq.advanced === false && !eq.advancedPending && !eq.pending));
+  }
+
+  setAdvancedEq(on) {
+    if (this.state.connected && this.state.flatEq === false) this.equalizer.setAdvanced(on);
   }
 
   // ---- dual connection (see dual-connection.js) -----------------------------
@@ -206,7 +227,8 @@ class NothingDevice extends Emitter {
   #applyNoise(mode, strength) {
     this.#send(Command.SET_NOISE_MODE, encodeNoiseMode(mode, strength ?? undefined));
     this.noise.begin({ mode, strength });
-    this.#setNoiseState(mode, strength);
+    if (this.state.capabilities.pro) this.#update({ noisePending: true });
+    else this.#setNoiseState(mode, strength);
   }
 
   #onNoiseReport(report) {
@@ -243,6 +265,7 @@ class NothingDevice extends Emitter {
   // ---- plumbing -------------------------------------------------------------
 
   #send(command, payload = []) {
+    if (!this.state.connected) return;
     this.operationId = (this.operationId + 1) & 0xff;
     this.bridge.write(encodeFrame(command, payload, this.operationId));
   }
@@ -252,28 +275,39 @@ class NothingDevice extends Emitter {
     this.emit('change', this.getState());
   }
 
-  #onConnected({ name }) {
+  #onConnected({ name, modelId }) {
+    if (this.state.connected) this.#onDisconnected();
     this.parser.reset();
-    const base = capabilitiesForName(name);
+    const base = capabilitiesForName(name, modelId);
     const capabilities = { ...base, bassLevels: bassLevels(base.bassSteps) };
     this.#update({ connected: true, name, capabilities });
 
+    const later = (fn, delay) => {
+      const timer = setTimeout(() => {
+        this.readTimers.delete(timer);
+        fn();
+      }, delay);
+      this.readTimers.add(timer);
+    };
+
     // Stagger the first reads so the earbuds aren't flooded.
     this.refreshBattery();
-    setTimeout(() => this.#send(Command.GET_NOISE_MODE), INITIAL_QUERY_GAP_MS);
+    later(() => this.#send(Command.GET_NOISE_MODE), INITIAL_QUERY_GAP_MS);
+    if (capabilities.pro) later(() => this.#send(Command.GET_FLAT_EQ), INITIAL_QUERY_GAP_MS * 2);
     if (capabilities.bassSteps) {
-      setTimeout(() => this.#send(Command.GET_BASS), INITIAL_QUERY_GAP_MS * 2);
+      later(() => this.#send(Command.GET_BASS), INITIAL_QUERY_GAP_MS * 2);
     }
-    this.quick.onConnected(INITIAL_QUERY_GAP_MS * 3);
-    this.equalizer.onConnected(INITIAL_QUERY_GAP_MS * 7);
-    this.dual.onConnected(INITIAL_QUERY_GAP_MS * 9);
-    this.gestures.onConnected(INITIAL_QUERY_GAP_MS * 11);
+    this.quick.onConnected(INITIAL_QUERY_GAP_MS * 3, later);
+    this.equalizer.onConnected(INITIAL_QUERY_GAP_MS * 7, later);
+    this.dual.onConnected(INITIAL_QUERY_GAP_MS * 9, later);
+    this.gestures.onConnected(INITIAL_QUERY_GAP_MS * 11, later);
 
     clearInterval(this.batteryTimer);
     this.batteryTimer = setInterval(() => this.refreshBattery(), BATTERY_POLL_MS);
   }
 
   #onDisconnected() {
+    this.lastAncStrength = 'high';
     this.#clearTimers();
     this.parser.reset();
     if (this.state.connected) {
@@ -283,14 +317,28 @@ class NothingDevice extends Emitter {
   }
 
   #onData(chunk) {
+    if (!this.state.connected) return;
     for (const frame of this.parser.push(chunk)) {
       if (Response.BATTERY.includes(frame.command)) {
         this.#update({ battery: decodeBattery(frame.payload) });
       } else if (Response.NOISE_MODE.includes(frame.command)) {
-        const report = decodeNoiseMode(frame.payload);
+        const report = this.state.capabilities.pro
+          ? decodeProNoiseMode(frame.payload, { mode: this.state.noiseMode, strength: this.state.ancStrength })
+          : decodeNoiseMode(frame.payload);
         if (report) this.#onNoiseReport(report);
       } else if (Response.BASS.includes(frame.command)) {
         if (this.state.capabilities.bassSteps) this.#onBassReport(frame.payload);
+      } else if (this.state.capabilities.pro && Response.FLAT_EQ.includes(frame.command)) {
+        const value = frame.payload[0];
+        if (value !== 0 && value !== 1) continue;
+        if (this.state.flatEq === (value === 1)) continue;
+        this.equalizer.reset();
+        this.#update({ flatEq: value === 1, eq: { ...this.state.eq, advanced: null, pending: false, advancedPending: false } });
+        if (value === 0) {
+          this.#send(Command.GET_ADVANCED_EQ);
+          this.#send(Command.GET_EQ);
+          this.#send(Command.GET_CUSTOM_EQ);
+        }
       } else if (!this.equalizer.handle(frame) && !this.dual.handle(frame) && !this.gestures.handle(frame)) {
         this.quick.handle(frame);
       }
@@ -298,6 +346,8 @@ class NothingDevice extends Emitter {
   }
 
   #clearTimers() {
+    for (const timer of this.readTimers) clearTimeout(timer);
+    this.readTimers.clear();
     this.noise.reset();
     this.bassSetting.reset();
     this.quick.reset();

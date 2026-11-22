@@ -509,6 +509,26 @@ hr {
   font-variant-numeric: tabular-nums;
 }
 
+/* App version row: sits under Firmware, without a second divider. */
+.qs-footer.qs-app {
+  align-items: baseline;
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+}
+/* Text button that opens a web page. */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: default;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn:focus,
+.link-btn:focus-visible { outline: none; }
+
 /* ---- Equalizer ---- */
 .eq-tile { min-height: 44px; }
 .qs-tiles.busy .eq-tile:not(.on) { opacity: 0.45; pointer-events: none; }
@@ -786,3 +806,5 @@ hr {
 /* Monochrome heart in the text colour, not a red emoji. */
 .made-by .heart { width: 10px; height: 9px; color: var(--text); }
 .made-by-name { color: var(--text); font-weight: 600; }
+
+.option:disabled, .eq-tile:disabled { opacity: 0.5; }

@@ -11,11 +11,15 @@ use objc2_foundation::{NSDictionary, NSString};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
 pub const NAME: &str = "macos";
+/// Label of the start-at-login item in the tray menu.
+pub const LOGIN_ITEM_LABEL: &str = "Open at Login";
 
 /// SF Symbols used by the panel, keyed by the names the UI uses (data-sym="…").
 /// Loaded from macOS so they match the system exactly.
 const SYMBOLS: &[(&str, &str)] = &[
     ("budLeft", "airpodpro.left"),
+    ("headphones", "headphones"),
+    ("eq_detail", "waveform"),
     ("budRight", "airpodpro.right"),
     ("case", "earbuds.case.fill"),
     ("anc", "person.wave.2.fill"),
@@ -107,6 +111,12 @@ pub fn accent_color() -> String {
     }
 }
 
+/// The tray icon and whether it is a template image: the app logo, which
+/// macOS tints for light and dark menu bars. Rebuilt by `npm run build:icon`.
+pub fn tray_icon() -> (&'static [u8], bool) {
+    (include_bytes!("../../icons/tray.png"), true)
+}
+
 /// Lets the window appear on every Space, including on top of another app's
 /// full-screen Space (that needs its own flag, and an accessory app; see
 /// main.rs). Call on the main thread.
@@ -123,6 +133,11 @@ pub fn join_all_spaces(window: &tauri::WebviewWindow) {
                 | NSWindowCollectionBehavior::FullScreenAuxiliary,
         );
     }
+}
+
+/// On macOS any app bundle counts as installed.
+pub fn is_installed_copy() -> bool {
+    login_item_supported()
 }
 
 /// Login items need an app bundle (…/Nothing X Mac.app/Contents/MacOS/…).

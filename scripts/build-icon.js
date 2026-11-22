@@ -4,8 +4,12 @@
 //                   square with a soft shadow
 //   icon.png        128 px copy of the app icon (Tauri's default window icon)
 //   icon-1024.png   1024 px copy (README)
+//   icon.ico        Windows app icon: the same tile, filling more of the square
 //   tray.png        menu bar icon: the bare logo as a template image, which
 //                   macOS tints for light and dark menu bars
+//   tray-windows-light.png / tray-windows-dark.png
+//                   Windows tray icon: white logo for a dark taskbar, dark
+//                   logo for a light one (Windows doesn't tint tray icons)
 //
 //   npm run build:icon
 //
@@ -27,12 +31,17 @@ const OUT = path.join(ICONS, 'icon.icns');
 // is centred on an 18 pt canvas; drawn at 2x for Retina menu bars.
 const TRAY = { canvasPt: 18, logoPt: 14, scale: 2 };
 
-// Layout on the 1024 px macOS icon grid.
+// Layouts on a 1024 px grid: a centred rounded square (tile) with the logo on it.
 const GRID = 1024;
-const TILE = 824; // rounded square, centred
-const RADIUS = 185;
-const LOGO_WIDTH = 0.56 * TILE;
-const SHADOW = { offsetY: 12, blur: 28, opacity: 0.35 };
+const LOGO_SHARE = 0.56; // logo width as a share of the tile
+// macOS icons leave a margin for the system's drop shadow.
+const MAC_LAYOUT = { tile: 824, radius: 185, shadow: { offsetY: 12, blur: 28, opacity: 0.35 } };
+// Windows icons fill the square and have no shadow of their own.
+const WINDOWS_LAYOUT = { tile: 976, radius: 210, shadow: null };
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+
+// Windows tray icon: the logo fitted into a square, drawn at 2x (16 pt tray slot).
+const WINDOWS_TRAY = { size: 32, logoBox: 28 };
 const TOP = [0x26, 0x26, 0x28]; // background gradient, top to bottom
 const BOTTOM = [0x08, 0x08, 0x09];
 
@@ -46,15 +55,15 @@ function roundedRectDistance(x, y, cx, cy, half, radius) {
   return outside + Math.min(Math.max(qx, qy), 0) - radius;
 }
 
-function renderIcon(size, logo) {
+function renderIcon(size, logo, layout = MAC_LAYOUT) {
   const s = size / GRID;
   const centre = size / 2;
-  const half = (TILE / 2) * s;
-  const radius = RADIUS * s;
+  const half = (layout.tile / 2) * s;
+  const radius = layout.radius * s;
   const rgba = Buffer.alloc(size * size * 4);
 
   // Logo, rasterized at its final size and centred on the tile.
-  const logoW = Math.round(LOGO_WIDTH * s);
+  const logoW = Math.round(LOGO_SHARE * layout.tile * s);
   const logoH = Math.round(logoW / logo.aspect);
   const logoX = Math.round(centre - logoW / 2);
   const logoY = Math.round(centre - logoH / 2);
@@ -80,8 +89,12 @@ function renderIcon(size, logo) {
       }
 
       // Soft drop shadow below the tile.
-      const ds = roundedRectDistance(px, py - SHADOW.offsetY * s, centre, centre, half, radius);
-      const shadow = SHADOW.opacity * clamp01(1 - Math.max(ds, 0) / (SHADOW.blur * s)) ** 2;
+      let shadow = 0;
+      if (layout.shadow) {
+        const { offsetY, blur, opacity } = layout.shadow;
+        const ds = roundedRectDistance(px, py - offsetY * s, centre, centre, half, radius);
+        shadow = opacity * clamp01(1 - Math.max(ds, 0) / (blur * s)) ** 2;
+      }
 
       // Composite tile over shadow (shadow is black, so only alpha adds up).
       const alpha = tile + shadow * (1 - tile);
@@ -110,6 +123,75 @@ function renderTray(logo) {
     }
   }
   return { rgba, width, height };
+}
+
+// The logo in one flat colour, fitted into a square canvas and centred.
+function renderWindowsTray(logo, [r, g, b]) {
+  const { size, logoBox } = WINDOWS_TRAY;
+  const logoW = logo.aspect >= 1 ? logoBox : Math.round(logoBox * logo.aspect);
+  const logoH = logo.aspect >= 1 ? Math.round(logoBox / logo.aspect) : logoBox;
+  const left = Math.round((size - logoW) / 2);
+  const top = Math.round((size - logoH) / 2);
+  const coverage = rasterizeLogo(logo, logoW, logoH);
+  const rgba = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < logoH; y++) {
+    for (let x = 0; x < logoW; x++) {
+      const i = ((y + top) * size + (x + left)) * 4;
+      rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b;
+      rgba[i + 3] = Math.round(Math.min(coverage[y * logoW + x], 1) * 255);
+    }
+  }
+  return encodePng(rgba, size, size);
+}
+
+// ---- .ico container ----------------------------------------------------------
+
+// One icon image as a 32-bit bitmap, the format every Windows tool accepts for
+// sizes below 256: header, BGRA rows bottom-up, then an (empty) 1-bit mask.
+function encodeIcoBitmap(rgba, size) {
+  const header = Buffer.alloc(40);
+  header.writeUInt32LE(40, 0); // header size
+  header.writeInt32LE(size, 4);
+  header.writeInt32LE(size * 2, 8); // colour rows + mask rows
+  header.writeUInt16LE(1, 12); // planes
+  header.writeUInt16LE(32, 14); // bits per pixel
+  header.writeUInt32LE(size * size * 4, 20);
+
+  const pixels = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const from = (y * size + x) * 4;
+      const to = ((size - 1 - y) * size + x) * 4;
+      pixels[to] = rgba[from + 2];
+      pixels[to + 1] = rgba[from + 1];
+      pixels[to + 2] = rgba[from];
+      pixels[to + 3] = rgba[from + 3];
+    }
+  }
+  // Mask rows are padded to 32 bits; all zero because alpha does the job.
+  const mask = Buffer.alloc(Math.ceil(size / 32) * 4 * size);
+  return Buffer.concat([header, pixels, mask]);
+}
+
+// images: [{ size, data }] where data is a bitmap (above) or, for 256 px, a PNG.
+function encodeIco(images) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(1, 2); // type: icon
+  header.writeUInt16LE(images.length, 4);
+
+  let offset = header.length + images.length * 16;
+  const entries = images.map(({ size, data }) => {
+    const entry = Buffer.alloc(16);
+    entry[0] = size === 256 ? 0 : size; // 0 means 256
+    entry[1] = size === 256 ? 0 : size;
+    entry.writeUInt16LE(1, 4); // colour planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(data.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += data.length;
+    return entry;
+  });
+  return Buffer.concat([header, ...entries, ...images.map((image) => image.data)]);
 }
 
 // ---- minimal PNG encoder (RGBA, 8-bit) ---------------------------------------
@@ -183,7 +265,15 @@ function main() {
   const tray = renderTray(logo);
   fs.writeFileSync(path.join(ICONS, 'tray.png'), encodePng(tray.rgba, tray.width, tray.height));
 
-  console.log(`Built ${path.relative(ROOT, ICONS)}: icon.icns, icon.png, icon-1024.png, tray.png`);
+  const ico = ICO_SIZES.map((size) => {
+    const rgba = renderIcon(size, logo, WINDOWS_LAYOUT);
+    return { size, data: size === 256 ? encodePng(rgba, size, size) : encodeIcoBitmap(rgba, size) };
+  });
+  fs.writeFileSync(path.join(ICONS, 'icon.ico'), encodeIco(ico));
+  fs.writeFileSync(path.join(ICONS, 'tray-windows-light.png'), renderWindowsTray(logo, [255, 255, 255]));
+  fs.writeFileSync(path.join(ICONS, 'tray-windows-dark.png'), renderWindowsTray(logo, [0, 0, 0]));
+
+  console.log(`Built ${path.relative(ROOT, ICONS)}: icon.icns, icon.ico, icon.png, icon-1024.png and tray icons`);
 }
 
 main();

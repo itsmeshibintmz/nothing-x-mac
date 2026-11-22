@@ -11,6 +11,6 @@
   <true/>
   <!-- Shown in the Bluetooth permission prompt (the bundled nx-bridge helper talks to the earbuds). -->
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Nothing X Mac connects to your earbuds to show battery and control their settings.</string>
+  <string>Nothing X Mac uses Bluetooth to show your headphone or earbud battery and change audio settings.</string>
 </dict>
 </plist>
