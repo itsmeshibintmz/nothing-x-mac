@@ -1,14 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Nothing X Win",
-  "mainBinaryName": "Nothing X Win",
+  "productName": "Nothing X Windows",
+  "mainBinaryName": "Nothing X Windows",
   "identifier": "com.nothingxwin.app",
   "app": {
     "windows": [
       {
         "label": "popover",
         "url": "index.html",
-        "title": "Nothing X Win",
+        "title": "Nothing X Windows",
         "width": 300,
         "height": 360,
         "visible": false,
