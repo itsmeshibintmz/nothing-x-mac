@@ -7,12 +7,14 @@ use serde_json::Value;
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{app_name, bridge::Bridge, platform, popover, tray, AUTHOR_URL};
+use crate::{app_name, bridge::Bridge, platform, popover, tray, AUTHOR_URL, RELEASES_URL};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitInfo {
     app_name: String,
+    /// This build's version, e.g. "0.2.0" (from package.json).
+    app_version: String,
     /// "macos" or "windows"; the UI styles itself per platform.
     platform: &'static str,
     /// System accent colour as #rrggbb.
@@ -25,6 +27,7 @@ pub struct InitInfo {
 pub fn init(app: AppHandle) -> InitInfo {
     InitInfo {
         app_name: app_name(&app),
+        app_version: app.package_info().version.to_string(),
         platform: platform::NAME,
         accent: platform::accent_color(),
         symbols: platform::symbols(),
@@ -44,8 +47,18 @@ pub fn set_tooltip(app: AppHandle, text: String) {
 
 #[tauri::command]
 pub fn open_author(app: AppHandle) {
-    if let Err(err) = app.opener().open_url(AUTHOR_URL, None::<&str>) {
-        eprintln!("[shell] could not open {AUTHOR_URL}: {err}");
+    open_in_browser(&app, AUTHOR_URL);
+}
+
+/// "Check for updates": opens the latest release in the browser.
+#[tauri::command]
+pub fn open_releases(app: AppHandle) {
+    open_in_browser(&app, RELEASES_URL);
+}
+
+fn open_in_browser(app: &AppHandle, url: &str) {
+    if let Err(err) = app.opener().open_url(url, None::<&str>) {
+        eprintln!("[shell] could not open {url}: {err}");
     }
 }
 

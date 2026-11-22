@@ -81,6 +81,12 @@ function render(state) {
 
 // Per-platform touches the stylesheet can't do on its own. The Windows look
 // (styles.windows.css) keys off data-platform.
+// The app's own version, next to the firmware version in Quick Settings.
+function renderAppVersion(appVersion) {
+  $('#qs-app-version').textContent = `App version ${appVersion}`;
+  $('#qs-check-updates').addEventListener('click', () => nx.openReleases());
+}
+
 function applyPlatform(platform, appName) {
   document.documentElement.dataset.platform = platform;
   document.title = appName;
@@ -91,8 +97,9 @@ function applyPlatform(platform, appName) {
 }
 
 async function main() {
-  const { accent, symbols, device, platform, appName } = await nx.init();
+  const { accent, symbols, device, platform, appName, appVersion } = await nx.init();
   applyPlatform(platform, appName);
+  renderAppVersion(appVersion);
   document.documentElement.style.setProperty('--accent', accent);
   nx.onAccent((c) => document.documentElement.style.setProperty('--accent', c));
   applySymbols(symbols);

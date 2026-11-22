@@ -80,6 +80,8 @@ const nx = {
   onAccent: (cb) => accentListeners.push(cb),
   quit: () => invoke('quit'),
   openAuthor: () => invoke('open_author'),
+  // "Check for updates": opens the latest release on GitHub in the browser.
+  openReleases: () => invoke('open_releases'),
   popupMenu,
 
   onDeviceState: (cb) => device.on('change', cb),

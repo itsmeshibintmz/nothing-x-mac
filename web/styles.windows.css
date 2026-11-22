@@ -395,4 +395,6 @@ html[data-platform="windows"] {
   }
 
   .qs-footer { margin: 12px 14px 0; }
+  .qs-footer.qs-app { margin-top: 6px; }
+  .link-btn { color: var(--win-accent-text); }
 }

@@ -18,6 +18,8 @@ mod tray;
 use tauri::{AppHandle, Manager, RunEvent};
 
 pub const AUTHOR_URL: &str = "https://yashraut.me";
+/// Where "Check for updates" goes: the newest release, with its downloads.
+pub const RELEASES_URL: &str = "https://github.com/yashraut362/nothing-x-mac/releases/latest";
 
 /// The product name for this platform (from the Tauri config).
 pub fn app_name(app: &AppHandle) -> String {
@@ -34,6 +36,7 @@ fn main() {
             commands::set_height,
             commands::set_tooltip,
             commands::open_author,
+            commands::open_releases,
             commands::quit,
             commands::bridge_connection,
             commands::bridge_write,
