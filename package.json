@@ -13,8 +13,8 @@
   "scripts": {
     "build:bridge": "scripts/build-bridge.sh",
     "build:icon": "node scripts/build-icon.js",
-    "start": "npm run build:icon && tauri dev --no-dev-server",
-    "dist": "npm run build:icon && tauri build --target universal-apple-darwin",
+    "start": "tauri dev --no-dev-server",
+    "dist": "tauri build --target universal-apple-darwin",
     "install-app": "npm run dist && ditto \"src-tauri/target/universal-apple-darwin/release/bundle/macos/Nothing X Mac.app\" \"/Applications/Nothing X Mac.app\" && echo \"Installed to /Applications/Nothing X Mac.app\"",
     "release": "npm run dist && node scripts/release.js"
   },
