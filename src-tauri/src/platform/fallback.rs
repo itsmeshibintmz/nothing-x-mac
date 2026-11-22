@@ -19,6 +19,10 @@ pub fn tray_icon() -> (&'static [u8], bool) {
 
 pub fn join_all_spaces(_window: &tauri::WebviewWindow) {}
 
+pub fn is_installed_copy() -> bool {
+    false
+}
+
 pub fn login_item_supported() -> bool {
     false
 }

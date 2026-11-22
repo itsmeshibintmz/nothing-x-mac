@@ -33,6 +33,9 @@ use transport::{Events, Transport};
 
 const EVENT: &str = "bridge:message";
 const LOG_FILE: &str = "bluetooth.log";
+/// The log starts fresh on each launch and stops growing at this size, so an
+/// app left running for weeks can't fill the disk with retry messages.
+const LOG_LIMIT_BYTES: usize = 512 * 1024;
 /// Set NXM_DEBUG=1 to log every message to and from the earbuds.
 const DEBUG_ENV: &str = "NXM_DEBUG";
 
@@ -53,7 +56,7 @@ impl Bridge {
         let events: Arc<dyn Events> = Arc::new(AppEvents {
             app: app.clone(),
             connection: connection.clone(),
-            log_file: Mutex::new(open_log(app)),
+            log_file: Mutex::new(open_log(app).map(|file| LogFile { file, written: 0 })),
         });
         events.log(&format!("Bluetooth transport starting ({})", std::env::consts::OS));
         Self { connection, transport: start_transport(events) }
@@ -102,7 +105,12 @@ fn start_transport(events: Arc<dyn Events>) -> Option<Box<dyn Transport>> {
 struct AppEvents {
     app: AppHandle,
     connection: Arc<Mutex<Option<Value>>>,
-    log_file: Mutex<Option<File>>,
+    log_file: Mutex<Option<LogFile>>,
+}
+
+struct LogFile {
+    file: File,
+    written: usize,
 }
 
 /// Starts a fresh log for this run; None if the folder can't be written.
@@ -136,9 +144,15 @@ impl Events for AppEvents {
 
     fn log(&self, message: &str) {
         eprintln!("[nx-bridge] {message}");
-        if let Some(file) = self.log_file.lock().unwrap().as_mut() {
-            let _ = writeln!(file, "{message}").and_then(|()| file.flush());
+        let mut log_file = self.log_file.lock().unwrap();
+        let Some(log) = log_file.as_mut() else { return };
+        log.written += message.len() + 1;
+        if log.written > LOG_LIMIT_BYTES {
+            let _ = writeln!(log.file, "Log is full; later messages are not recorded");
+            *log_file = None;
+            return;
         }
+        let _ = writeln!(log.file, "{message}").and_then(|()| log.file.flush());
     }
 }
 

@@ -133,6 +133,11 @@ pub fn join_all_spaces(window: &tauri::WebviewWindow) {
     }
 }
 
+/// On macOS any app bundle counts as installed.
+pub fn is_installed_copy() -> bool {
+    login_item_supported()
+}
+
 /// Login items need an app bundle (…/Nothing X Mac.app/Contents/MacOS/…).
 pub fn login_item_supported() -> bool {
     std::env::current_exe().is_ok_and(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))

@@ -6,16 +6,20 @@
 //   1. list paired audio devices that are connected right now,
 //   2. try to open the service on each; the first that answers is the earbuds,
 //   3. relay bytes until the channel closes, then look again.
+//
+// A device that doesn't open the service is retried less and less often, so
+// someone's other headphones aren't probed every few seconds.
 
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     mem::size_of,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc::{sync_channel, Receiver, SyncSender},
         Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use windows::{
@@ -38,6 +42,14 @@ use super::transport::{Events, Transport};
 /// Nothing / CMF control service (the same id the macOS helper uses).
 const SERVICE_ID: GUID = GUID::from_u128(0xAEAC4A03_DFF5_498F_843A_34487CF133EB);
 const SCAN_INTERVAL: Duration = Duration::from_secs(3);
+/// Longest wait between attempts on a device that keeps refusing. A device
+/// named like Nothing / CMF earbuds is probably just busy (the phone app holds
+/// the channel), so it is retried often; anything else is probably some other
+/// headset that will never answer.
+const RETRY_CAP_EARBUDS: Duration = Duration::from_secs(15);
+const RETRY_CAP_OTHER: Duration = Duration::from_secs(10 * 60);
+/// Frames waiting to be sent; more than this means the link is stuck.
+const OUTBOX_SIZE: usize = 64;
 /// Bluetooth "major device class" for audio/video devices (earbuds, headphones).
 const MAJOR_CLASS_AUDIO: u32 = 0x04;
 /// Winsock 2.2.
@@ -48,12 +60,15 @@ struct Shared {
     /// The open channel's socket, or NO_SOCKET. Whoever swaps it out closes it.
     socket: AtomicUsize,
     stopping: AtomicBool,
-    /// Keeps frames from interleaving when two writes race.
-    writing: Mutex<()>,
+    /// Held while sending, and while freeing the socket, so a send never
+    /// touches a handle that was already closed.
+    sending: Mutex<()>,
 }
 
 pub struct WinsockTransport {
     shared: Arc<Shared>,
+    /// Frames queued for the writer thread.
+    outbox: SyncSender<Vec<u8>>,
 }
 
 struct Device {
@@ -61,31 +76,36 @@ struct Device {
     name: String,
 }
 
+/// How a device that refused the service is being retried.
+struct Retry {
+    failures: u32,
+    next_attempt: Instant,
+}
+
 pub fn start(events: Arc<dyn Events>) -> WinsockTransport {
     let shared = Arc::new(Shared {
         socket: AtomicUsize::new(NO_SOCKET),
         stopping: AtomicBool::new(false),
-        writing: Mutex::new(()),
+        sending: Mutex::new(()),
     });
-    let worker = shared.clone();
-    thread::spawn(move || run(&worker, events.as_ref()));
-    WinsockTransport { shared }
+    let (outbox, frames) = sync_channel(OUTBOX_SIZE);
+
+    let reader = shared.clone();
+    thread::spawn(move || run(&reader, events.as_ref()));
+    let writer = shared.clone();
+    thread::spawn(move || send_frames(&writer, &frames));
+
+    WinsockTransport { shared, outbox }
 }
 
 impl Transport for WinsockTransport {
+    /// Queues the bytes and returns at once. Sending can block when the link
+    /// stalls, and this is called from the app's main thread.
     fn write(&self, bytes: &[u8]) {
-        let _guard = self.shared.writing.lock().unwrap();
-        let raw = self.shared.socket.load(Ordering::SeqCst);
-        if raw == NO_SOCKET {
-            return;
-        }
-        let mut rest = bytes;
-        while !rest.is_empty() {
-            let sent = unsafe { send(SOCKET(raw), rest, SEND_RECV_FLAGS(0)) };
-            if sent <= 0 {
-                break; // the read loop notices the broken channel
-            }
-            rest = &rest[sent as usize..];
+        if self.shared.socket.load(Ordering::SeqCst) != NO_SOCKET {
+            // A full queue means the link is stuck; dropping the frame is fine,
+            // the page re-reads settings it didn't get confirmed.
+            let _ = self.outbox.try_send(bytes.to_vec());
         }
     }
 
@@ -99,9 +119,29 @@ impl Transport for WinsockTransport {
 fn close(shared: &Shared) {
     let raw = shared.socket.swap(NO_SOCKET, Ordering::SeqCst);
     if raw != NO_SOCKET {
-        unsafe {
-            shutdown(SOCKET(raw), SD_BOTH);
-            closesocket(SOCKET(raw));
+        // Shutting down first unblocks a send or receive in progress; the
+        // handle is only freed once no send is using it.
+        unsafe { shutdown(SOCKET(raw), SD_BOTH) };
+        let _sending = shared.sending.lock().unwrap();
+        unsafe { closesocket(SOCKET(raw)) };
+    }
+}
+
+/// Writer thread: sends queued frames, one at a time, to the open channel.
+fn send_frames(shared: &Shared, frames: &Receiver<Vec<u8>>) {
+    for frame in frames {
+        let _sending = shared.sending.lock().unwrap();
+        let raw = shared.socket.load(Ordering::SeqCst);
+        if raw == NO_SOCKET {
+            continue; // disconnected while the frame was queued
+        }
+        let mut rest = frame.as_slice();
+        while !rest.is_empty() {
+            let sent = unsafe { send(SOCKET(raw), rest, SEND_RECV_FLAGS(0)) };
+            if sent <= 0 {
+                break; // the read loop notices the broken channel
+            }
+            rest = &rest[sent as usize..];
         }
     }
 }
@@ -113,10 +153,9 @@ fn run(shared: &Shared, events: &dyn Events) {
         return;
     }
 
-    // Addresses whose failure was already logged, so a busy or unsupported
-    // device doesn't fill the log every few seconds.
-    let mut reported = HashSet::new();
-    // Likewise, "nothing to connect to" is logged once per dry spell.
+    // Devices that refused the service, by address, and when to try them again.
+    let mut retries: HashMap<u64, Retry> = HashMap::new();
+    // "Nothing to connect to" is logged once per dry spell.
     let mut reported_none = false;
 
     while !shared.stopping.load(Ordering::SeqCst) {
@@ -129,15 +168,17 @@ fn run(shared: &Shared, events: &dyn Events) {
         } else {
             reported_none = false;
         }
+        // A device that disconnected starts fresh when it comes back.
+        retries.retain(|address, _| candidates.iter().any(|device| device.address == *address));
 
-        if let Some((socket, device)) = connect_to_earbuds(candidates, events, &mut reported) {
+        if let Some((socket, device)) = connect_to_earbuds(candidates, events, &mut retries) {
             shared.socket.store(socket.0, Ordering::SeqCst);
             // `stop` may have run between connecting and storing the socket.
             if shared.stopping.load(Ordering::SeqCst) {
                 close(shared);
                 break;
             }
-            reported.clear();
+            retries.clear();
             events.connected(&device.name, &format_address(device.address));
 
             let mut buffer = [0u8; 1024];
@@ -162,13 +203,17 @@ fn run(shared: &Shared, events: &dyn Events) {
     }
 }
 
-/// Tries each candidate device until one opens the service.
+/// Tries each candidate device that is due for an attempt until one opens the
+/// service.
 fn connect_to_earbuds(
     candidates: Vec<Device>,
     events: &dyn Events,
-    reported: &mut HashSet<u64>,
+    retries: &mut HashMap<u64, Retry>,
 ) -> Option<(SOCKET, Device)> {
     for device in candidates {
+        if retries.get(&device.address).is_some_and(|retry| Instant::now() < retry.next_attempt) {
+            continue;
+        }
         let Ok(socket) = (unsafe { socket(i32::from(AF_BTH), SOCK_STREAM, BTHPROTO_RFCOMM as i32) })
         else {
             continue;
@@ -193,7 +238,14 @@ fn connect_to_earbuds(
 
         let error = unsafe { WSAGetLastError() }.0;
         unsafe { closesocket(socket) };
-        if reported.insert(device.address) {
+
+        let retry = retries
+            .entry(device.address)
+            .or_insert(Retry { failures: 0, next_attempt: Instant::now() });
+        retry.failures += 1;
+        retry.next_attempt = Instant::now() + retry_delay(&device.name, retry.failures);
+        // Logged once per device, not on every retry.
+        if retry.failures == 1 {
             events.log(&format!(
                 "Could not open channel to {} ({}): Windows socket error {error}",
                 device.name,
@@ -202,6 +254,24 @@ fn connect_to_earbuds(
         }
     }
     None
+}
+
+/// Doubles from the scan interval up to a cap that depends on the device.
+fn retry_delay(name: &str, failures: u32) -> Duration {
+    let cap = if looks_like_earbuds(name) { RETRY_CAP_EARBUDS } else { RETRY_CAP_OTHER };
+    let doubled = SCAN_INTERVAL.saturating_mul(1u32 << failures.saturating_sub(1).min(16));
+    doubled.min(cap)
+}
+
+/// True for names Nothing and CMF products use ("CMF Buds 2 Plus", "Ear (a)",
+/// "Nothing Headphone (1)"). Only a hint for how often to retry.
+fn looks_like_earbuds(name: &str) -> bool {
+    let name = name.to_lowercase();
+    name.contains("nothing")
+        || name.contains("cmf")
+        || name.starts_with("ear ")
+        || name.starts_with("ear(")
+        || name.starts_with("headphone")
 }
 
 /// Paired Bluetooth devices that are connected and are audio devices.

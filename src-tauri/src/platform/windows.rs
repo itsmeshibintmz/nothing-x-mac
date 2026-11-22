@@ -11,6 +11,7 @@ pub const NAME: &str = "windows";
 pub const LOGIN_ITEM_LABEL: &str = "Start with Windows";
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+/// Also removed by the uninstaller: keep in step with windows/installer-hooks.nsh.
 const RUN_VALUE: &str = "NothingXMac";
 const DWM_KEY: &str = r"Software\Microsoft\Windows\DWM";
 const THEME_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
@@ -114,6 +115,15 @@ pub fn join_all_spaces(_window: &tauri::WebviewWindow) {}
 
 pub fn login_item_supported() -> bool {
     true
+}
+
+/// True for a copy put in place by the installer, which leaves its
+/// uninstaller next to the app. A portable exe run from Downloads isn't one.
+pub fn is_installed_copy() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("uninstall.exe").exists()))
+        .unwrap_or(false)
 }
 
 /// True if Windows is set to start this copy of the app at sign-in.

@@ -1,8 +1,9 @@
 // Open at Login.
 //
 // The system can only start an installed app at login, so this only works in
-// the packaged app, not under `npm start`. On the packaged app's first run it
-// turns itself on; after that the user's choice is kept.
+// the packaged app, not under `npm start`. On an installed copy's first run it
+// turns itself on; after that the user's choice is kept. A copy that merely
+// runs from wherever it was downloaded never signs itself up.
 
 use std::{fs, path::PathBuf};
 
@@ -31,7 +32,7 @@ pub fn set_enabled(enabled: bool) {
 
 /// Turns Open at Login on once, the first time the installed app runs.
 pub fn enable_on_first_run(app: &AppHandle) {
-    if !is_supported() {
+    if !is_supported() || !platform::is_installed_copy() {
         return;
     }
     let Ok(dir) = app.path().app_data_dir() else { return };
