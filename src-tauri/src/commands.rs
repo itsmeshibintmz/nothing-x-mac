@@ -7,10 +7,12 @@ use serde_json::Value;
 use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{bridge::Bridge, platform, popover, tray, AUTHOR_URL};
+use crate::{app_name, bridge::Bridge, platform, popover, tray, AUTHOR_URL};
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InitInfo {
+    app_name: String,
     /// "macos" or "windows"; the UI styles itself per platform.
     platform: &'static str,
     /// System accent colour as #rrggbb.
@@ -20,8 +22,9 @@ pub struct InitInfo {
 }
 
 #[tauri::command]
-pub fn init() -> InitInfo {
+pub fn init(app: AppHandle) -> InitInfo {
     InitInfo {
+        app_name: app_name(&app),
         platform: platform::NAME,
         accent: platform::accent_color(),
         symbols: platform::symbols(),
@@ -30,8 +33,8 @@ pub fn init() -> InitInfo {
 
 /// Keeps the window as tall as the panel's content.
 #[tauri::command]
-pub fn set_height(window: WebviewWindow, height: f64) {
-    popover::set_height(&window, height);
+pub fn set_height(app: AppHandle, window: WebviewWindow, height: f64) {
+    popover::set_height(&app, &window, height);
 }
 
 #[tauri::command]

@@ -1,0 +1,65 @@
+# Builds the Windows installer on a real Windows machine.
+#
+# Runs on every push to the `windows` branch, or by hand from the Actions tab
+# ("Run workflow"). The installer and a portable .exe are attached to the run
+# as downloadable artifacts. Builds are not code-signed.
+
+name: Windows build
+
+on:
+  push:
+    branches: [windows]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Rust is preinstalled on the runner; make sure it is current.
+      - name: Update Rust
+        run: rustup update stable --no-self-update && rustup default stable
+
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: windows-cargo-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run dist:windows
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: nothing-x-windows-installer
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Upload portable exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: nothing-x-windows-portable
+          path: src-tauri/target/release/*.exe
+          if-no-files-found: error

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeDevCommand": { "script": "npm run build:bridge", "wait": true },
+    "beforeBuildCommand": "npm run build:bridge -- universal"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "popover",
+        "url": "index.html",
+        "title": "Nothing X Mac",
+        "width": 300,
+        "height": 360,
+        "visible": false,
+        "focus": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "acceptFirstMouse": true,
+        "backgroundThrottling": "disabled",
+        "windowEffects": {
+          "effects": ["menu"],
+          "state": "active",
+          "radius": 12
+        }
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app"],
+    "externalBin": ["../build/nx-bridge"],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-"
+    }
+  }
+}

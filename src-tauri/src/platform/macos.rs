@@ -11,6 +11,8 @@ use objc2_foundation::{NSDictionary, NSString};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
 pub const NAME: &str = "macos";
+/// Label of the start-at-login item in the tray menu.
+pub const LOGIN_ITEM_LABEL: &str = "Open at Login";
 
 /// SF Symbols used by the panel, keyed by the names the UI uses (data-sym="…").
 /// Loaded from macOS so they match the system exactly.
@@ -105,6 +107,12 @@ pub fn accent_color() -> String {
         Some((r, g, b)) => format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b)),
         None => "#007aff".into(),
     }
+}
+
+/// The tray icon and whether it is a template image: the app logo, which
+/// macOS tints for light and dark menu bars. Rebuilt by `npm run build:icon`.
+pub fn tray_icon() -> (&'static [u8], bool) {
+    (include_bytes!("../../icons/tray.png"), true)
 }
 
 /// Lets the window appear on every Space, including on top of another app's

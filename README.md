@@ -108,6 +108,11 @@ npm start
 `npm start` also builds the Swift Bluetooth helper (`native/mac/NXBridge.swift`).
 macOS asks for Bluetooth permission on first run.
 
+**Windows (in progress, not released yet).** The same commands work on a
+Windows PC with Rust and the WebView2 runtime (built into Windows 11). Pair and
+connect the earbuds in Windows' Bluetooth settings first. `npm run dist:windows`
+builds the installer.
+
 Log every message to and from the earbuds:
 
 ```bash
@@ -140,9 +145,11 @@ web/                      Everything that runs in the web view (shared by all pl
     equalizer.js  quick-settings.js  dual-connection.js  gestures.js
   platform/               Glue between the page and the app shell
 src-tauri/                App shell (Rust): tray icon, panel window, native menus
-  src/bridge.rs           Runs the Bluetooth helper and relays its bytes
-  src/platform/           Per-OS code: system symbols, accent colour, Open at Login
-native/mac/NXBridge.swift Bluetooth helper: finds the buds, relays raw bytes over stdio
+  src/bridge/             Bluetooth byte transport: helper.rs runs the Mac helper,
+                          winsock.rs opens the channel directly on Windows
+  src/platform/           Per-OS code: panel icons, accent colour, start at login
+  tauri.*.conf.json       Shared config plus one file per OS (window, bundle)
+native/mac/NXBridge.swift Mac Bluetooth helper: finds the buds, relays raw bytes over stdio
 scripts/                  Helper, icon and release builds
 ```
 

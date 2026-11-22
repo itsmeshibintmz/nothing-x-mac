@@ -10,7 +10,8 @@ import { BluetoothBridge } from './bluetooth-bridge.js';
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
-const APP_NAME = 'Nothing X Mac';
+// The product name on this platform; the shell reports it in `init`.
+let appName = 'Nothing X';
 // How long to wait for a menu choice after the menu reports it closed.
 const MENU_CHOICE_GRACE_MS = 150;
 
@@ -21,7 +22,7 @@ const accentListeners = [];
 
 let tooltip = null;
 device.on('change', (state) => {
-  const next = state.connected ? `${APP_NAME} · ${state.name}` : APP_NAME;
+  const next = state.connected ? `${appName} · ${state.name}` : appName;
   if (next === tooltip) return;
   tooltip = next;
   invoke('set_tooltip', { text: next });
@@ -68,8 +69,9 @@ async function init() {
   });
 
   const info = await invoke('init');
+  appName = info.appName;
   await device.start();
-  return { appName: APP_NAME, ...info, device: device.getState() };
+  return { ...info, device: device.getState() };
 }
 
 const nx = {

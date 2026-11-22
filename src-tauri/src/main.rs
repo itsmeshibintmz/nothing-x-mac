@@ -15,10 +15,14 @@ mod popover;
 mod popup_menu;
 mod tray;
 
-use tauri::{Manager, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent};
 
-pub const APP_NAME: &str = "Nothing X Mac";
 pub const AUTHOR_URL: &str = "https://yashraut.me";
+
+/// The product name for this platform (from the Tauri config).
+pub fn app_name(app: &AppHandle) -> String {
+    app.package_info().name.clone()
+}
 
 fn main() {
     #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]

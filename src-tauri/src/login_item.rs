@@ -51,5 +51,5 @@ pub fn enable_on_first_run(app: &AppHandle) {
 /// Where the Electron version (0.1.0) kept the same marker.
 fn legacy_marker(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().data_dir().ok()?;
-    Some(dir.join(crate::APP_NAME).join(FIRST_RUN_MARKER))
+    Some(dir.join("Nothing X Mac").join(FIRST_RUN_MARKER))
 }

@@ -3,7 +3,7 @@
   "productName": "Nothing X Mac",
   "version": "0.1.0",
   "private": true,
-  "description": "Control Nothing and CMF earbuds from the Mac menu bar",
+  "description": "Control Nothing and CMF earbuds from the menu bar or system tray",
   "author": {
     "name": "Yash Raut",
     "url": "https://yashraut.me"
@@ -15,6 +15,7 @@
     "build:icon": "node scripts/build-icon.js",
     "start": "tauri dev --no-dev-server",
     "dist": "tauri build --target universal-apple-darwin",
+    "dist:windows": "tauri build",
     "install-app": "npm run dist && ditto \"src-tauri/target/universal-apple-darwin/release/bundle/macos/Nothing X Mac.app\" \"/Applications/Nothing X Mac.app\" && echo \"Installed to /Applications/Nothing X Mac.app\"",
     "release": "npm run dist && node scripts/release.js"
   },

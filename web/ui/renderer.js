@@ -72,9 +72,20 @@ function render(state) {
   equalizer.render(state);
 }
 
-async function main() {
-  const { accent, symbols, device, platform } = await nx.init();
+// Per-platform touches the stylesheet can't do on its own. The Windows look
+// (styles.windows.css) keys off data-platform.
+function applyPlatform(platform, appName) {
   document.documentElement.dataset.platform = platform;
+  document.title = appName;
+  for (const attr of ['title', 'aria-label']) $('#quit').setAttribute(attr, `Quit ${appName}`);
+
+  // Windows flyouts keep their buttons in a bar along the bottom.
+  if (platform === 'windows') $('#view-main footer').append($('.header-actions'));
+}
+
+async function main() {
+  const { accent, symbols, device, platform, appName } = await nx.init();
+  applyPlatform(platform, appName);
   document.documentElement.style.setProperty('--accent', accent);
   nx.onAccent((c) => document.documentElement.style.setProperty('--accent', c));
   applySymbols(symbols);
