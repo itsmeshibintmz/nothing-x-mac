@@ -30,6 +30,7 @@ macro_rules! fluent {
 const SYMBOLS: &[(&str, &str)] = &[
     ("budLeft", fluent!("surface_earbuds_20_filled")),
     ("budRight", fluent!("surface_earbuds_20_filled")),
+    ("headphones", fluent!("headphones_20_filled")),
     ("case", fluent!("box_20_filled")),
     ("anc", fluent!("headphones_sound_wave_20_filled")),
     ("transparency", fluent!("sound_source_20_regular")),
@@ -72,6 +73,7 @@ const SYMBOLS: &[(&str, &str)] = &[
     ("eq_electronic", fluent!("sine_wave_dots_20_regular")),
     ("eq_vocals", fluent!("mic_20_regular")),
     ("eq_custom", fluent!("options_20_regular")),
+    ("eq_detail", fluent!("data_bar_vertical_20_regular")),
 ];
 
 /// SVG data URLs the page uses as CSS masks, so glyphs pick up theme colours.

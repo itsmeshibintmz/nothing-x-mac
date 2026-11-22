@@ -18,6 +18,8 @@ pub const LOGIN_ITEM_LABEL: &str = "Open at Login";
 /// Loaded from macOS so they match the system exactly.
 const SYMBOLS: &[(&str, &str)] = &[
     ("budLeft", "airpodpro.left"),
+    ("headphones", "headphones"),
+    ("eq_detail", "waveform"),
     ("budRight", "airpodpro.right"),
     ("case", "earbuds.case.fill"),
     ("anc", "person.wave.2.fill"),

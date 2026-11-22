@@ -27,7 +27,7 @@ const FULL = 63;
 // 5-level and 3-step bass versions); the device layer corrects bass from the
 // first report.
 const MODELS = [
-  { name: 'Nothing Headphone (1) Pro', anc: FULL, bass: 0, inEar: true, ring: 'headphone', eq: 'nothing', treble: 3500, spatial: 7, dual: 'yes', sound: 'audiodo', gestures: null },
+  { name: 'Nothing Headphone (1) Pro', id: 'B192', anc: FULL, bass: 0, inEar: true, ring: 'headphone', eq: 'headphonePro', treble: 3500, spatial: 0, dual: 'yes', sound: 'audiodo', gestures: null },
   { name: 'Nothing Headphone (1)', anc: FULL, bass: 5, inEar: true, ring: 'headphone', eq: 'nothing', treble: 3500, spatial: 7, dual: 'yes', sound: 'audiodo', gestures: null },
   { name: 'Nothing Headphone (a)', anc: FULL, bass: 3, inEar: false, ring: 'headphone', eq: 'nothing', treble: 3500, spatial: 28, dual: 'yes', sound: null, gestures: null },
   { name: 'Nothing Ear (open)', anc: FULL, bass: 0, inEar: false, ring: 'buds', eq: 'nothing', treble: 3400, spatial: 0, dual: 'yes', sound: null, gestures: null },
@@ -54,6 +54,7 @@ const DEFAULT_MODEL = { anc: FULL, bass: 5, inEar: true, ring: 'buds', eq: 'noth
 
 function modelForName(name = '') {
   const lower = name.toLowerCase();
+  if (/\bheadphones?\s*\(?1\)?\s*pro\b/i.test(name)) return MODELS.find((m) => m.id === 'B192');
   return MODELS.find((m) => lower.includes(m.name.toLowerCase())) ?? DEFAULT_MODEL;
 }
 
@@ -66,8 +67,9 @@ function modelForName(name = '') {
 //   dualConnection, dualRestarts, personalSound: 'mimi' | 'audiodo' | null,
 //   gestures: { sides, slots } | null,
 // }
-function capabilitiesForName(name) {
-  const { anc, bass, inEar, ring, eq, treble, spatial, dual, sound, gestures } = modelForName(name);
+function capabilitiesForName(name, modelId) {
+  const model = modelId === 'B192' ? MODELS.find((m) => m.id === modelId) : modelForName(name);
+  const { anc, bass, inEar, ring, eq, treble, spatial, dual, sound, gestures } = model;
   const hasBase = Boolean(anc & ANC_BIT.STRENGTH_BASE);
   const hasMid = Boolean(anc & ANC_BIT.STRENGTH_MID);
 
@@ -75,6 +77,7 @@ function capabilitiesForName(name) {
   if (hasBase) strengths = hasMid ? ['low', 'mid', 'high'] : ['low', 'high'];
 
   return {
+    pro: model.id === 'B192',
     transparency: Boolean(anc & ANC_BIT.TRANSPARENCY),
     strengths,
     adaptive: hasBase && Boolean(anc & ANC_BIT.ADAPTIVE),

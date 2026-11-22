@@ -47,7 +47,7 @@ class BluetoothBridge extends Emitter {
       case 'connected':
         if (this.#connected) return;
         this.#connected = true;
-        this.emit('connected', { name: msg.name, address: msg.address });
+        this.emit('connected', { name: msg.name, address: msg.address, modelId: msg.modelId });
         break;
       case 'data':
         this.emit('data', fromHex(msg.hex));

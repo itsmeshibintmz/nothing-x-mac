@@ -2,7 +2,7 @@
 //
 // The earbud protocol lives in the page (web/core); this only moves bytes.
 // The page hears from it through "bridge:message" events:
-//   { type: "connected", name, address } | { type: "data", hex } | { type: "disconnected" }
+//   { type: "connected", name, address, modelId } | { type: "data", hex } | { type: "disconnected" }
 // and sends bytes with the `bridge_write` command.
 //
 // Each platform has its own transport behind the same interface:
@@ -45,7 +45,7 @@ fn debug() -> bool {
 }
 
 pub struct Bridge {
-    /// { name, address } while the earbuds are connected.
+    /// { name, address, modelId } while the earbuds are connected.
     connection: Arc<Mutex<Option<Value>>>,
     transport: Option<Box<dyn Transport>>,
 }
@@ -121,10 +121,13 @@ fn open_log(app: &AppHandle) -> Option<File> {
 }
 
 impl Events for AppEvents {
-    fn connected(&self, name: &str, address: &str) {
-        *self.connection.lock().unwrap() = Some(json!({ "name": name, "address": address }));
+    fn connected(&self, name: &str, address: &str, model_id: Option<&str>) {
+        let connection = json!({ "name": name, "address": address, "modelId": model_id });
+        *self.connection.lock().unwrap() = Some(connection.clone());
         self.log(&format!("Connected to {name} ({address})"));
-        let _ = self.app.emit(EVENT, json!({ "type": "connected", "name": name, "address": address }));
+        let mut message = connection;
+        message["type"] = json!("connected");
+        let _ = self.app.emit(EVENT, message);
     }
 
     fn data(&self, bytes: &[u8]) {

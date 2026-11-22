@@ -11,6 +11,7 @@
   "homepage": "https://github.com/yashraut362/nothing-x-mac",
   "license": "MIT",
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "build:bridge": "scripts/build-bridge.sh",
     "build:icon": "node scripts/build-icon.js",
     "start": "tauri dev --no-dev-server",

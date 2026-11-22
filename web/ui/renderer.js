@@ -28,19 +28,21 @@ function applySymbols(symbols) {
 
 function renderHeader(state) {
   $('#panel').classList.toggle('disconnected', !state.connected);
-  $('#device-name').textContent = state.connected ? state.name : 'No Earbuds';
+  $('#device-name').textContent = state.connected ? state.name : 'No device';
   $('#device-status').textContent = state.connected ? 'Connected' : 'Not connected';
 }
 
-function renderBattery(battery) {
-  for (const part of ['left', 'right', 'case']) {
+function renderBattery(battery, caps) {
+  const single = Boolean(battery.stereo) || (caps.ring === 'headphone' && !battery.left && !battery.right && !battery.case);
+  for (const part of ['stereo', 'left', 'right', 'case']) {
     const el = $(`.bud[data-part="${part}"]`);
     const info = battery[part];
     // No case data (e.g. case closed or out of range): drop the column so the
     // buds sit centred. Missing buds stay visible but dimmed.
-    if (part === 'case') el.hidden = !info;
+    el.hidden = part === 'stereo' ? !single : single || (part === 'case' && !info);
     el.classList.toggle('unavailable', !info);
     el.classList.toggle('charging', Boolean(info?.charging));
+    el.querySelector('.pct').setAttribute('aria-label', info ? `${info.level}%${info.charging ? ', charging' : ''}` : 'Unavailable');
     el.classList.toggle('low', Boolean(info && !info.charging && info.level <= LOW_BATTERY));
     el.querySelector('.pct').textContent = info ? `${info.level}%` : '—';
     el.querySelector('.fill').style.width = info ? `${info.level}%` : '0';
@@ -59,7 +61,12 @@ function renderCapabilities(capabilities) {
 
 function render(state) {
   renderHeader(state);
-  renderBattery(state.battery);
+  renderBattery(state.battery, state.capabilities);
+  const locked = state.capabilities.pro && state.flatEq !== false;
+  $('.option[data-mode="transparency"]').disabled = Boolean(locked);
+  const flatStatus = $('#flat-eq-status');
+  flatStatus.hidden = !locked;
+  flatStatus.textContent = state.flatEq ? 'Flat EQ is on. Use the left earcup switch to restore Transparency, EQ and Spatial Audio.' : 'Reading the Flat EQ switch…';
   renderCapabilities(state.capabilities);
   switchLock.sync(state.noisePending);
   renderNoiseMode(state.noiseMode);
@@ -113,7 +120,7 @@ async function main() {
     const btn = e.target.closest('.option');
     if (!btn || switchLock.locked || btn.getAttribute('aria-checked') === 'true') return;
     switchLock.lock(); // no more changes until the buds confirm this one
-    renderNoiseMode(btn.dataset.mode); // optimistic; device state confirms
+    renderNoiseMode(btn.dataset.mode);
     nx.setNoiseMode(btn.dataset.mode);
   });
 

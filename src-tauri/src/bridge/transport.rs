@@ -4,7 +4,9 @@
 /// What a transport reports back.
 pub trait Events: Send + Sync {
     /// A channel to the earbuds is open. `name` is the device's Bluetooth name.
-    fn connected(&self, name: &str, address: &str);
+    /// `model_id` is set when the transport identified the exact model by
+    /// something more reliable than the name (e.g. "B192", the Headphone (1) Pro).
+    fn connected(&self, name: &str, address: &str, model_id: Option<&str>);
     /// Bytes received from the earbuds.
     fn data(&self, bytes: &[u8]);
     /// The channel closed.

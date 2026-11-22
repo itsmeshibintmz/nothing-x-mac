@@ -786,3 +786,5 @@ hr {
 /* Monochrome heart in the text colour, not a red emoji. */
 .made-by .heart { width: 10px; height: 9px; color: var(--text); }
 .made-by-name { color: var(--text); font-weight: 600; }
+
+.option:disabled, .eq-tile:disabled { opacity: 0.5; }

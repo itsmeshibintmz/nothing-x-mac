@@ -2,7 +2,7 @@
 //
 // The helper finds the earbuds, opens the channel and speaks JSON lines over
 // stdio (see native/mac/NXBridge.swift):
-//   stdout  {"type":"connected","name":"…","address":"…"} | {"type":"data","hex":"…"}
+//   stdout  {"type":"connected","name":"…","address":"…","modelId":"…"?} | {"type":"data","hex":"…"}
 //           {"type":"disconnected"} | {"type":"log","message":"…"}
 //   stdin   {"type":"write","hex":"…"} | {"type":"quit"}
 // If the helper exits, it is started again after a short pause.
@@ -133,7 +133,9 @@ fn on_line(events: &dyn Events, line: &str) {
     };
     let text = |key: &str| message[key].as_str().unwrap_or_default();
     match message["type"].as_str() {
-        Some("connected") => events.connected(text("name"), text("address")),
+        Some("connected") => {
+            events.connected(text("name"), text("address"), message["modelId"].as_str());
+        }
         Some("data") => {
             if let Some(bytes) = from_hex(text("hex")) {
                 events.data(&bytes);

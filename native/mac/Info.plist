@@ -7,6 +7,6 @@
   <key>CFBundleName</key>
   <string>nx-bridge</string>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Nothing X Mac connects to your earbuds to show battery and control noise cancellation.</string>
+  <string>Nothing X Mac uses Bluetooth to show your headphone or earbud battery and change audio settings.</string>
 </dict>
 </plist>

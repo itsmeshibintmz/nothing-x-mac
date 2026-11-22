@@ -32,8 +32,8 @@ class Gestures {
     this.pendingTimer = null;
   }
 
-  onConnected(startDelayMs = 0) {
-    if (this.capabilities().gestures) setTimeout(() => this.send(Command.GET_GESTURES), startDelayMs);
+  onConnected(startDelayMs = 0, later = setTimeout) {
+    if (this.capabilities().gestures) later(() => this.send(Command.GET_GESTURES), startDelayMs);
   }
 
   // Returns true if the frame belonged to gestures.

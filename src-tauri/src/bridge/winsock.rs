@@ -179,7 +179,7 @@ fn run(shared: &Shared, events: &dyn Events) {
                 break;
             }
             retries.clear();
-            events.connected(&device.name, &format_address(device.address));
+            events.connected(&device.name, &format_address(device.address), None);
 
             let mut buffer = [0u8; 1024];
             loop {
