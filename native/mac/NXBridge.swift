@@ -82,7 +82,10 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
 
         let connected = paired.filter { $0.isConnected() }
         let names = Set(connected.compactMap { $0.name })
-        if pro.active {
+        // An established LE link is the control channel: only keep it alive.
+        // An LE attempt still in flight must not hold up the classic scan
+        // below, or ordinary earbuds would wait on it before reconnecting.
+        if pro.connected {
             pro.scan(connectedNames: names)
             return
         }
@@ -112,6 +115,8 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
             }
 
             openFailures[address] = 0
+            // This device uses the classic channel: drop any LE attempt in flight.
+            pro.close()
             channel = opened
             device = candidate
             emit([
@@ -164,7 +169,7 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
 
     func write(hex: String) {
         guard var data = bytes(fromHex: hex), !data.isEmpty else { return }
-        if pro.active { pro.write(data); return }
+        if pro.connected { pro.write(data); return }
         guard let channel else { return }
         let status = data.withUnsafeMutableBytes { buffer in
             channel.writeSync(buffer.baseAddress, length: UInt16(buffer.count))

@@ -21,7 +21,10 @@ final class ProBluetooth: NSObject, CBCentralManagerDelegate, CBPeripheralDelega
     private var nextAttempt: TimeInterval = 0
     private var deadline: TimeInterval = 0
 
-    var active: Bool { peripheral != nil }
+    /// True once the LE control link is up and usable. An attempt that is
+    /// still discovering services doesn't count: until it succeeds, the device
+    /// may just as well be ordinary earbuds that use the classic channel.
+    var connected: Bool { ready }
 
     func scan(connectedNames: Set<String>) {
         let now = ProcessInfo.processInfo.systemUptime
