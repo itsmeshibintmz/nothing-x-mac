@@ -1,6 +1,6 @@
 [package]
 name = "nothing-x-mac"
-version = "0.1.0"
+version = "0.2.0"
 description = "Control Nothing and CMF earbuds from the menu bar"
 authors = ["Yash Raut"]
 license = "MIT"
