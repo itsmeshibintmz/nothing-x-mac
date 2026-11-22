@@ -100,16 +100,8 @@ already has it).
 
 ### Verify the download
 
-Each release is scanned on VirusTotal. The SHA-256 in each link matches
-`SHA256SUMS.txt` on the release, so you can check it's the same file.
-
-| v0.1.0 | VirusTotal |
-| --- | --- |
-| `Nothing-X-Mac-0.1.0-universal.dmg` | [Scan report](https://www.virustotal.com/gui/file/17922dbf103660eb30e458da1f62b8491c149c5b51ebf27044ab2356ef869190) |
-| `Nothing-X-Mac-0.1.0-universal.zip` | [Scan report](https://www.virustotal.com/gui/file/2489a7e9857c9c846e975bc3585a0946a56515a3869bb6181179a2ebb1351769) |
-
-<!-- 0.2.0 release: replace the table above with the 0.2.0 files (Mac .dmg and
-     .zip, Windows setup .exe) and their VirusTotal links. -->
+Each release includes `SHA256SUMS.txt`, with the SHA-256 checksum of every
+download. If a file's checksum matches, it's the same file that was published.
 
 To check a file yourself:
 
