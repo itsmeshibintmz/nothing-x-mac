@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <title>Nothing X Mac</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.windows.css" />
   </head>
   <body>
     <div id="panel" class="panel">
@@ -12,7 +13,7 @@
       <header class="header">
         <span class="device-badge"><i class="logo" aria-hidden="true"></i></span>
         <div class="header-text">
-          <div class="title" id="device-name">No Earbuds</div>
+          <div class="title" id="device-name">No device</div>
           <div class="subtitle" id="device-status">Not connected</div>
         </div>
         <div class="header-actions">
@@ -29,11 +30,16 @@
       </header>
 
       <p class="empty" id="empty-message">
-        Connect your Nothing or CMF earbuds in Bluetooth settings.
+        Connect your Nothing or CMF audio device in Bluetooth settings.
       </p>
 
       <div class="connected-only">
       <section class="battery" aria-label="Battery">
+        <div class="bud" data-part="stereo" hidden>
+          <i class="sym bud-icon" data-sym="headphones"></i>
+          <div class="bud-label">Headphones</div>
+          <div class="bud-level"><span class="pct"></span><span class="batt"><span class="fill"></span></span></div>
+        </div>
         <div class="bud" data-part="left">
           <i class="sym bud-icon" data-sym="budLeft"></i>
           <div class="bud-label">Left</div>
@@ -55,6 +61,7 @@
 
       <section class="section" id="noise-section" aria-label="Noise Control">
         <div class="section-title">Noise Control</div>
+        <p class="qs-note" id="flat-eq-status" role="status" hidden></p>
         <div class="options" role="radiogroup" id="noise-options">
           <button class="row option" role="radio" data-mode="anc">
             <span class="option-icon"><i class="sym" data-sym="anc"></i></span>
@@ -164,6 +171,11 @@
           <span>Firmware</span>
           <span id="qs-firmware">—</span>
         </div>
+        <!-- This app's version, and a link to the latest release on GitHub -->
+        <div class="qs-footer qs-app">
+          <span id="qs-app-version">App version</span>
+          <button class="link-btn" id="qs-check-updates" title="Open the latest release on GitHub">Check for updates</button>
+        </div>
       </div>
 
       <!-- Controls view (gestures), opened by clicking the left or right bud in the battery row -->
@@ -205,6 +217,9 @@
           <div class="title">Equalizer</div>
         </header>
 
+        <label id="advanced-eq-row" class="group-row" hidden>
+          <input type="checkbox" class="checkbox" id="advanced-eq"> Use saved Advanced EQ
+        </label>
         <div class="qs-tiles" id="eq-tiles" role="radiogroup" aria-label="Equalizer preset"></div>
 
         <!-- Custom: live curve over three band sliders -->

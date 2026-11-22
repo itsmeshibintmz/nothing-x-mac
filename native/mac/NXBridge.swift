@@ -1,7 +1,7 @@
 // nx-bridge: a tiny Bluetooth transport for Nothing X Mac.
 //
-// Finds a connected, paired earbud that exposes the Nothing control service,
-// opens an RFCOMM channel to it, and relays raw bytes over stdio as JSON lines.
+// Finds a connected device and relays its control packets over stdio as JSON lines.
+// Most models use RFCOMM. ProBluetooth handles the B192's GATT transport.
 // It knows nothing about the earbud protocol itself; that lives in web/core/.
 //
 // stdout events:  {"type":"connected","name":"…","address":"…"}
@@ -14,6 +14,7 @@
 
 import Foundation
 import IOBluetooth
+import CoreBluetooth
 
 // Nothing / CMF control service (SPP over RFCOMM).
 let serviceUUIDBytes: [UInt8] = [
@@ -55,7 +56,9 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
     private var openFailures: [String: Int] = [:]
     private var linkResetDone = Set<String>()
     private var shuttingDown = false
-    private let serviceUUID = IOBluetoothSDPUUID(bytes: serviceUUIDBytes, length: 16)
+    private var scanSummary = ""
+    private let pro = ProBluetooth()
+    private let serviceUUID = IOBluetoothSDPUUID(bytes: serviceUUIDBytes, length: serviceUUIDBytes.count)
 
     func start() {
         scan()
@@ -67,15 +70,35 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
     // Look for a connected paired device that offers the control service.
     private func scan() {
         guard channel == nil, !shuttingDown else { return }
-        guard let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else { return }
+        let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] ?? []
+        if ProcessInfo.processInfo.environment["NXM_DEBUG"] != nil {
+            let connected = paired.filter { $0.isConnected() }.count
+            let summary = "Bluetooth authorization \(CBManager.authorization.rawValue), paired \(paired.count), connected \(connected)"
+            if summary != scanSummary {
+                log(summary)
+                scanSummary = summary
+            }
+        }
 
-        for candidate in paired where candidate.isConnected() {
+        let connected = paired.filter { $0.isConnected() }
+        let names = Set(connected.compactMap { $0.name })
+        // An established LE link is the control channel: only keep it alive.
+        // An LE attempt still in flight must not hold up the classic scan
+        // below, or ordinary earbuds would wait on it before reconnecting.
+        if pro.connected {
+            pro.scan(connectedNames: names)
+            return
+        }
+        for candidate in connected {
             guard let record = candidate.getServiceRecord(for: serviceUUID) else {
                 // Service list not cached yet: ask once, pick it up on a later scan.
                 let address = candidate.addressString ?? ""
                 if !sdpRequested.contains(address) {
                     sdpRequested.insert(address)
-                    candidate.performSDPQuery(nil)
+                    let status = candidate.performSDPQuery(nil)
+                    if ProcessInfo.processInfo.environment["NXM_DEBUG"] != nil {
+                        log("Refreshing Bluetooth services (\(describe(status)))")
+                    }
                 }
                 continue
             }
@@ -92,6 +115,8 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
             }
 
             openFailures[address] = 0
+            // This device uses the classic channel: drop any LE attempt in flight.
+            pro.close()
             channel = opened
             device = candidate
             emit([
@@ -101,6 +126,7 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
             ])
             return
         }
+        pro.scan(connectedNames: names)
     }
 
     // Opening usually fails because the earbuds still hold a channel from an
@@ -131,6 +157,7 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
     func shutdown() {
         guard !shuttingDown else { return }
         shuttingDown = true
+        pro.close()
         if let channel {
             self.channel = nil
             channel.setDelegate(nil)
@@ -141,7 +168,9 @@ final class Bridge: NSObject, IOBluetoothRFCOMMChannelDelegate {
     }
 
     func write(hex: String) {
-        guard let channel, var data = bytes(fromHex: hex), !data.isEmpty else { return }
+        guard var data = bytes(fromHex: hex), !data.isEmpty else { return }
+        if pro.connected { pro.write(data); return }
+        guard let channel else { return }
         let status = data.withUnsafeMutableBytes { buffer in
             channel.writeSync(buffer.baseAddress, length: UInt16(buffer.count))
         }
@@ -182,40 +211,41 @@ let bridge = Bridge()
 
 // Quit cleanly on signals (app quit, Ctrl-C, terminal closed).
 var signalSources: [DispatchSourceSignal] = []
-for sig in [SIGTERM, SIGINT, SIGHUP] {
-    signal(sig, SIG_IGN)
-    let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
-    source.setEventHandler { bridge.shutdown() }
-    source.resume()
-    signalSources.append(source)
+// A pipe read can end in the middle of a JSON command. Process complete lines on the main queue.
+var pendingInput = Data()
+func consumeInput(_ chunk: Data) {
+    pendingInput.append(chunk)
+    while let newline = pendingInput.firstIndex(of: 0x0a) {
+        let line = pendingInput[..<newline]
+        pendingInput.removeSubrange(...newline)
+        guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { continue }
+        if json["type"] as? String == "quit" { bridge.shutdown(); return }
+        if json["type"] as? String == "write", let hex = json["hex"] as? String { bridge.write(hex: hex) }
+    }
 }
 
-// Read commands from stdin; shut down when asked or when the app goes away (EOF).
-FileHandle.standardInput.readabilityHandler = { handle in
-    let chunk = handle.availableData
-    if chunk.isEmpty {
-        handle.readabilityHandler = nil
-        DispatchQueue.main.async { bridge.shutdown() }
-        return
-    }
-    guard let text = String(data: chunk, encoding: .utf8) else { return }
-    for line in text.split(separator: "\n") {
-        guard
-            let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-            let type = json["type"] as? String
-        else { continue }
-        switch type {
-        case "write":
-            if let hex = json["hex"] as? String {
-                DispatchQueue.main.async { bridge.write(hex: hex) }
-            }
-        case "quit":
-            DispatchQueue.main.async { bridge.shutdown() }
-        default:
-            break
+@main
+enum NXBridgeMain {
+    static func main() {
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { bridge.shutdown() }
+            source.resume()
+            signalSources.append(source)
         }
+
+        FileHandle.standardInput.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                DispatchQueue.main.async { bridge.shutdown() }
+                return
+            }
+            DispatchQueue.main.async { consumeInput(chunk) }
+        }
+
+        bridge.start()
+        RunLoop.main.run()
     }
 }
-
-bridge.start()
-RunLoop.main.run()

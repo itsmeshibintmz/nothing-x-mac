@@ -19,7 +19,7 @@ PLIST=native/mac/Info.plist
 compile() { # <swift arch> <output>
   swiftc -O -target "$1-apple-macos$MIN_MACOS" -framework IOBluetooth \
     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$PLIST" \
-    "$SRC" -o "$2"
+    "$SRC" native/mac/ProBluetooth.swift native/mac/ProDiscovery.swift -o "$2"
 }
 
 if [ "${1:-}" = "universal" ]; then

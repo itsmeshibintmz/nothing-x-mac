@@ -8,15 +8,12 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{login_item, popover, APP_NAME, AUTHOR_URL};
+use crate::{app_name, login_item, platform, popover, AUTHOR_URL};
 
 const TRAY_ID: &str = "main";
 const OPEN_AT_LOGIN: &str = "open-at-login";
 const AUTHOR: &str = "author";
 const QUIT: &str = "quit";
-
-/// The app logo as a template image; rebuilt by `npm run build:icon`.
-const ICON: &[u8] = include_bytes!("../icons/tray.png");
 
 struct TrayMenu {
     open_at_login: CheckMenuItem<Wry>,
@@ -26,14 +23,15 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let open_at_login = CheckMenuItem::with_id(
         app,
         OPEN_AT_LOGIN,
-        "Open at Login",
+        platform::LOGIN_ITEM_LABEL,
         // Only the installed app can start at login.
         login_item::is_supported(),
         login_item::is_enabled(),
         None::<&str>,
     )?;
     let author = MenuItem::with_id(app, AUTHOR, "Made by Yash Raut · yashraut.me", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, QUIT, format!("Quit {APP_NAME}"), true, None::<&str>)?;
+    let name = app_name(app);
+    let quit = MenuItem::with_id(app, QUIT, format!("Quit {name}"), true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
@@ -46,11 +44,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     )?;
     app.manage(TrayMenu { open_at_login });
 
+    let (icon, is_template) = platform::tray_icon();
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(ICON)?)
-        // macOS tints it for light and dark menu bars.
-        .icon_as_template(true)
-        .tooltip(APP_NAME)
+        .icon(Image::from_bytes(icon)?)
+        .icon_as_template(is_template)
+        .tooltip(name)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {

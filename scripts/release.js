@@ -1,4 +1,4 @@
-// Packs the universal app into release files for GitHub:
+// Packs the universal Mac app into release files for GitHub:
 //
 //   release/v<version>/Nothing-X-Mac-<version>-universal.dmg   drag-to-Applications disk image
 //   release/v<version>/Nothing-X-Mac-<version>-universal.zip   zipped .app
@@ -6,6 +6,11 @@
 //
 // Run through `npm run release`, which builds the universal app first
 // (npm run dist).
+//
+// The Windows installer is built on GitHub (.github/workflows/windows-build.yml).
+// Download it into the same folder, then run `npm run release:checksums` to
+// add it to SHA256SUMS.txt. Anything else in the folder (the installer, the
+// release notes) is left alone when the Mac files are rebuilt.
 
 const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -24,11 +29,37 @@ const outDir = path.join(ROOT, 'release', `v${version}`);
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' });
 
+const CHECKSUMS = 'SHA256SUMS.txt';
+// What gets a checksum: the Mac disk image and zip, and the Windows installer.
+const isReleaseFile = (name) => /\.(dmg|zip|exe)$/.test(name);
+
 function sha256(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
+function writeChecksums() {
+  const files = fs.readdirSync(outDir).filter(isReleaseFile).sort();
+  if (files.length === 0) throw new Error(`No release files in ${outDir}; run npm run release first`);
+  const sums = files.map((f) => `${sha256(path.join(outDir, f))}  ${f}`).join('\n');
+  fs.writeFileSync(path.join(outDir, CHECKSUMS), `${sums}\n`);
+}
+
+function listFiles() {
+  console.log(`\nRelease files in ${path.relative(ROOT, outDir)}:`);
+  for (const f of fs.readdirSync(outDir).filter((name) => !name.startsWith('.'))) {
+    const { size } = fs.statSync(path.join(outDir, f));
+    console.log(`  ${f}  ${(size / 1024 / 1024).toFixed(1)} MB`);
+  }
+}
+
 function main() {
+  // npm run release:checksums: only refresh SHA256SUMS.txt.
+  if (process.argv.includes('--checksums')) {
+    writeChecksums();
+    listFiles();
+    return;
+  }
+
   if (!fs.existsSync(appPath)) throw new Error(`Missing ${appPath}; run npm run release`);
 
   // Both architectures must be present in the app and the Bluetooth helper.
@@ -45,11 +76,11 @@ function main() {
   // The signature must be intact after bundling.
   run('codesign', ['--verify', '--deep', '--strict', appPath]);
 
-  fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
 
   // Zip: keeps the bundle's symlinks and signature intact.
   const zip = path.join(outDir, `${BASE}.zip`);
+  fs.rmSync(zip, { force: true });
   run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', appPath, zip]);
 
   // DMG: the app plus an Applications shortcut to drag it onto.
@@ -60,14 +91,8 @@ function main() {
   run('hdiutil', ['create', '-volname', APP_NAME, '-srcfolder', staging, '-ov', '-format', 'UDZO', dmg]);
   fs.rmSync(staging, { recursive: true, force: true });
 
-  const sums = [dmg, zip].map((f) => `${sha256(f)}  ${path.basename(f)}`).join('\n');
-  fs.writeFileSync(path.join(outDir, 'SHA256SUMS.txt'), `${sums}\n`);
-
-  console.log(`\nRelease files in ${path.relative(ROOT, outDir)}:`);
-  for (const f of fs.readdirSync(outDir)) {
-    const { size } = fs.statSync(path.join(outDir, f));
-    console.log(`  ${f}  ${(size / 1024 / 1024).toFixed(1)} MB`);
-  }
+  writeChecksums();
+  listFiles();
 }
 
 main();
