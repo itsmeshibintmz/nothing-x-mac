@@ -43,10 +43,10 @@ class DualConnection {
     });
   }
 
-  onConnected(startDelayMs = 0) {
+  onConnected(startDelayMs = 0, later = setTimeout) {
     if (!this.capabilities().dualConnection) return;
-    setTimeout(() => this.send(Command.GET_DUAL_ENABLE), startDelayMs);
-    setTimeout(() => this.refreshList(), startDelayMs + 150);
+    later(() => this.send(Command.GET_DUAL_ENABLE), startDelayMs);
+    later(() => this.refreshList(), startDelayMs + 150);
   }
 
   refreshList() {

@@ -16,6 +16,8 @@ pub const NAME: &str = "macos";
 /// Loaded from macOS so they match the system exactly.
 const SYMBOLS: &[(&str, &str)] = &[
     ("budLeft", "airpodpro.left"),
+    ("headphones", "headphones"),
+    ("eq_detail", "waveform"),
     ("budRight", "airpodpro.right"),
     ("case", "earbuds.case.fill"),
     ("anc", "person.wave.2.fill"),

@@ -84,9 +84,16 @@ Each release is scanned on VirusTotal. The SHA-256 in each link matches
 
 To check a file yourself: `shasum -a 256 Nothing-X-Mac-0.1.0-universal.dmg`
 
-## Supported earbuds
+## Supported devices
 
-Tested with **CMF Buds 2 Plus**. Other Nothing and CMF models (Ear, Ear (a),
+The original app was tested on **CMF Buds 2 Plus**. The **Nothing Headphone (1) Pro**
+was tested on firmware **1.0.1.58**. Its control connection uses Bluetooth
+LE and the menu shows one headphone battery. The physical Flat EQ switch locks
+Transparency and the equalizer. With Flat EQ off, open Equalizer and turn off
+**Use saved Advanced EQ** to use a simple preset, including More Detail. Turn
+it back on to hear the advanced profile already stored on the headphones.
+
+Other Nothing and CMF models (Ear, Ear (a),
 Ear (2), Ear (3), CMF Buds, Buds 2, Buds Pro 2, Headphone (1) and more) use
 per-model data from ear-web and should work, but haven't been tested yet.
 Reports and fixes are welcome.

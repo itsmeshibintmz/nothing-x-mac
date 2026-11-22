@@ -85,7 +85,7 @@ class QuickSettings {
   }
 
   // Read everything this model supports, staggered so the buds aren't flooded.
-  onConnected(startDelayMs = 0) {
+  onConnected(startDelayMs = 0, later = setTimeout) {
     const caps = this.capabilities();
     const reads = [Command.GET_FIRMWARE];
     for (const name of TOGGLE_NAMES) {
@@ -93,7 +93,7 @@ class QuickSettings {
       if (spec) reads.push(spec.get);
     }
     if (caps.spatialModes.length) reads.push(Command.GET_SPATIAL_AUDIO);
-    reads.forEach((command, i) => setTimeout(() => this.send(command), startDelayMs + i * READ_GAP_MS));
+    reads.forEach((command, i) => later(() => this.send(command), startDelayMs + i * READ_GAP_MS));
   }
 
   // Returns true if the frame belonged to quick settings.

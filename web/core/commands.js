@@ -12,6 +12,9 @@ const Command = {
   GET_LOW_LATENCY: 0xc041,
   SET_LOW_LATENCY: 0xf040,
   GET_FIRMWARE: 0xc042,
+  GET_FLAT_EQ: 0xc068,
+  GET_ADVANCED_EQ: 0xc04c,
+  SET_ADVANCED_EQ: 0xf04f,
   RING: 0xf002,
   // Equalizer presets: Nothing models use "EQ", CMF models "listening mode".
   GET_EQ: 0xc01f,
@@ -37,7 +40,9 @@ const Command = {
 
 // Frames the earbuds send back (replies and unsolicited updates).
 const Response = {
-  BATTERY: [0x4007, 0xe001],
+  BATTERY: [0x4007, 0xe001, 0x6001],
+  FLAT_EQ: [0x4068, 0xe01c, 0x601c],
+  ADVANCED_EQ: [0x404c],
   NOISE_MODE: [0x401e, 0xe003, 0x6003],
   BASS: [0x404e],
   IN_EAR: [0x400e],
@@ -90,6 +95,25 @@ const NOISE_CODES = [
 function decodeNoiseMode(payload) {
   const entry = NOISE_CODES.find((e) => e.code === payload[1]);
   return entry ? { mode: entry.mode, strength: entry.strength } : null;
+}
+
+function decodeProNoiseMode(payload, previous = {}) {
+  let { mode, strength } = previous;
+  let changed = false;
+  for (let at = 0; at + 1 < payload.length; at += 3) {
+    const type = payload[at];
+    const value = payload[at + 1];
+    const code = value === 0xfe ? 7 : value === 0 ? 5 : value;
+    const entry = NOISE_CODES.find((e) => e.code === code);
+    if (type === 1 && entry) {
+      ({ mode, strength } = entry);
+      changed = true;
+    } else if (type === 2 && mode === 'anc' && entry?.mode === 'anc') {
+      strength = entry.strength;
+      changed = true;
+    }
+  }
+  return changed ? { mode, strength } : null;
 }
 
 // strength only matters for mode "anc"; it defaults to high.
@@ -318,6 +342,7 @@ export {
   encodeCustomEq,
   decodeBattery,
   decodeNoiseMode,
+  decodeProNoiseMode,
   encodeNoiseMode,
   decodeBass,
   encodeBass,

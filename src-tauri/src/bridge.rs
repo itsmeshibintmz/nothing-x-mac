@@ -152,7 +152,7 @@ fn on_line(app: &AppHandle, shared: &Shared, line: &str) {
         }
         Some("connected") => {
             *shared.connection.lock().unwrap() =
-                Some(json!({ "name": message["name"], "address": message["address"] }));
+                Some(json!({ "name": message["name"], "address": message["address"], "modelId": message["modelId"] }));
         }
         Some("disconnected") => {
             shared.connection.lock().unwrap().take();

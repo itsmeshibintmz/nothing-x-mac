@@ -63,7 +63,7 @@ async function init() {
     setTimeout(() => { if (openMenu === menu) settleMenu(null); }, MENU_CHOICE_GRACE_MS);
   });
   await listen('popover:shown', (event) => {
-    device.refreshBattery();
+    device.refreshPanel();
     for (const cb of accentListeners) cb(event.payload.accent);
   });
 
@@ -92,6 +92,7 @@ const nx = {
   setGesture: (side, slot, value) => device.setGesture(side, slot, value),
   setGestureNoiseCycle: (side, slot, cycle) => device.setGestureNoiseCycle(side, slot, cycle),
   setEqPreset: (id) => device.setEqPreset(id),
+  setAdvancedEq: (on) => device.setAdvancedEq(on),
   setCustomEq: (bands) => device.setCustomEq(bands),
 };
 

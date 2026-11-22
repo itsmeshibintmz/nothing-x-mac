@@ -18,6 +18,8 @@ function initialEqState() {
   return {
     preset: null, // preset id once read
     pending: false, // a preset change is waiting for confirmation
+    advanced: null, // Pro: the headphones are using their saved Advanced EQ
+    advancedPending: false,
     custom: null, // { bass, mid, treble } in dB once read
   };
 }
@@ -32,6 +34,7 @@ class Equalizer {
     this.capabilities = capabilities;
     this.state = state;
     this.customTimer = null;
+    this.customReadTimer = null;
     this.lastLocalCustomAt = 0;
 
     this.confirm = new ConfirmedSetting({
@@ -39,16 +42,29 @@ class Equalizer {
       matches: (report, target) => report === target,
       onTimeout: () => this.patch({ pending: false }),
     });
+    this.advancedConfirm = new ConfirmedSetting({
+      read: () => this.send(Command.GET_ADVANCED_EQ),
+      matches: (reported, target) => reported === target,
+      onTimeout: () => this.patch({ advanced: null, advancedPending: false }),
+    });
   }
 
-  onConnected(startDelayMs = 0) {
+  onConnected(startDelayMs = 0, later = setTimeout) {
     const eq = this.capabilities().eq;
-    setTimeout(() => this.send(this.#commands().get), startDelayMs);
-    if (eq.customId !== null) setTimeout(() => this.send(Command.GET_CUSTOM_EQ), startDelayMs + 150);
+    later(() => this.send(this.#commands().get), startDelayMs);
+    if (eq.customId !== null) later(() => this.send(Command.GET_CUSTOM_EQ), startDelayMs + 150);
   }
 
   // Returns true if the frame belonged to the equalizer.
   handle(frame) {
+    if (this.capabilities().pro && Response.ADVANCED_EQ.includes(frame.command)) {
+      const value = frame.payload[0];
+      if ((value === 0 || value === 1) && this.advancedConfirm.accept(value === 1)) {
+        if (value === 1) clearTimeout(this.customTimer);
+        this.patch({ advanced: value === 1, advancedPending: false });
+      }
+      return true;
+    }
     if (Response.EQ_PRESET.includes(frame.command)) {
       const preset = decodePreset(frame.payload);
       if (this.confirm.accept(preset)) this.patch({ preset, pending: false });
@@ -71,9 +87,19 @@ class Equalizer {
 
     this.send(this.#commands().set, encodePreset(id));
     this.confirm.begin(id);
-    this.patch({ preset: id, pending: true });
+    this.patch(this.capabilities().pro ? { pending: true } : { preset: id, pending: true });
     // Picking Custom: load the saved bands so the sliders show them.
-    if (id === eq.customId) setTimeout(() => this.send(Command.GET_CUSTOM_EQ), 300);
+    if (id === eq.customId) this.customReadTimer = setTimeout(() => this.send(Command.GET_CUSTOM_EQ), 300);
+  }
+
+  setAdvanced(on) {
+    const state = this.state();
+    if (!this.capabilities().pro || typeof on !== 'boolean' || state.advanced === null ||
+        on === state.advanced || this.advancedConfirm.pending || this.confirm.pending) return;
+    clearTimeout(this.customTimer);
+    this.send(Command.SET_ADVANCED_EQ, [Number(on), 0]);
+    this.advancedConfirm.begin(on);
+    this.patch({ advancedPending: true });
   }
 
   // bands: any of { bass, mid, treble } in dB. Applies immediately in the UI,
@@ -98,7 +124,10 @@ class Equalizer {
 
   reset() {
     this.confirm.reset();
+    this.advancedConfirm.reset();
     clearTimeout(this.customTimer);
+    clearTimeout(this.customReadTimer);
+    this.lastLocalCustomAt = 0;
   }
 
   #commands() {
